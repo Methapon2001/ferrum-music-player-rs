@@ -68,6 +68,14 @@ impl eframe::App for App {
                 if let Some(cover) = &self.music_cover {
                     ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
                 }
+
+                if self.audio_sink.is_paused() {
+                    if ui.add(egui::Button::new("Play")).clicked() {
+                        self.audio_sink.play();
+                    }
+                } else if ui.add(egui::Button::new("Pause")).clicked() {
+                    self.audio_sink.pause();
+                }
             });
         });
     }
