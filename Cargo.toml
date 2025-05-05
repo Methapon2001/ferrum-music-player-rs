@@ -5,7 +5,15 @@ edition = "2024"
 
 [dependencies]
 eframe = { version = "0.31.1" }
+image = { version = "0.25.6", features = ["png", "jpeg"] }
+lofty = "0.22.4"
+mpris = "2.0.1"
 rfd = { version = "0.15.3", features = ["xdg-portal"] }
+
+[dependencies.rodio]
+git = "https://github.com/RustAudio/rodio.git"
+branch = "master"
+features = ["symphonia-flac", "symphonia-wav", "symphonia-mp3"]
 
 [dependencies.egui_extras]
 package = "egui_extras"
