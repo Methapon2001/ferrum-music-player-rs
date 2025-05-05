@@ -1,0 +1,16 @@
+[package]
+name = "egui-music-player"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = { version = "0.31.1" }
+rfd = { version = "0.15.3", features = ["xdg-portal"] }
+
+[dependencies.egui_extras]
+package = "egui_extras"
+version = "0.31.1"
+features = ["all_loaders"]
+
+[profile.dev]
+opt-level = 1

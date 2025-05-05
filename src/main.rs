@@ -1,0 +1,19 @@
+mod app;
+
+use app::App;
+use eframe::egui;
+
+fn main() -> eframe::Result {
+    eframe::run_native(
+        "App",
+        eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 540.0]),
+            ..Default::default()
+        },
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            Ok(Box::<App>::default())
+        }),
+    )
+}
