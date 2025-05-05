@@ -34,8 +34,6 @@ impl eframe::App for App {
                     egui::RichText::new("EGUI Music Player").heading(),
                 ));
 
-                ui.add_space(50.0);
-
                 if ui.add(egui::Button::new("Open file…")).clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_file() {
                         let mut file = std::fs::File::open(path).unwrap();
@@ -65,16 +63,36 @@ impl eframe::App for App {
                     }
                 }
 
-                if let Some(cover) = &self.music_cover {
-                    ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
+                if ui
+                    .add_enabled(
+                        self.audio_sink.is_paused() || self.audio_sink.empty(),
+                        egui::Button::new("Play"),
+                    )
+                    .clicked()
+                {
+                    self.audio_sink.play();
                 }
 
-                if self.audio_sink.is_paused() {
-                    if ui.add(egui::Button::new("Play")).clicked() {
-                        self.audio_sink.play();
-                    }
-                } else if ui.add(egui::Button::new("Pause")).clicked() {
+                if ui
+                    .add_enabled(
+                        !self.audio_sink.is_paused() && !self.audio_sink.empty(),
+                        egui::Button::new("Pause"),
+                    )
+                    .clicked()
+                {
                     self.audio_sink.pause();
+                }
+
+                if ui
+                    .add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"))
+                    .clicked()
+                {
+                    self.audio_sink.clear();
+                    self.music_cover = None;
+                }
+
+                if let Some(cover) = &self.music_cover {
+                    ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
                 }
             });
         });
