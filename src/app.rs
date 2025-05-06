@@ -71,30 +71,24 @@ impl eframe::App for App {
                     }
                 }
 
-                if ui
-                    .add_enabled(
-                        self.audio_sink.is_paused() || self.audio_sink.empty(),
-                        egui::Button::new("Play"),
-                    )
-                    .clicked()
-                {
+                let play_button = ui.add_enabled(
+                    self.audio_sink.is_paused() || self.audio_sink.empty(),
+                    egui::Button::new("Play"),
+                );
+                let pause_button = ui.add_enabled(
+                    !self.audio_sink.is_paused() && !self.audio_sink.empty(),
+                    egui::Button::new("Pause"),
+                );
+                let stop_button =
+                    ui.add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"));
+
+                if play_button.clicked() {
                     self.audio_sink.play();
                 }
-
-                if ui
-                    .add_enabled(
-                        !self.audio_sink.is_paused() && !self.audio_sink.empty(),
-                        egui::Button::new("Pause"),
-                    )
-                    .clicked()
-                {
+                if pause_button.clicked() {
                     self.audio_sink.pause();
                 }
-
-                if ui
-                    .add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"))
-                    .clicked()
-                {
+                if stop_button.clicked() {
                     self.audio_sink.clear();
                     self.music_cover = None;
                 }
