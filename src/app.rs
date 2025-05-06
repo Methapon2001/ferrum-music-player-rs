@@ -47,17 +47,11 @@ impl eframe::App for App {
                         let mut file = std::fs::File::open(path).unwrap();
 
                         let tagged_file = lofty::read_from(&mut file).unwrap();
-                        let cover = tagged_file.primary_tag().and_then(|tag| {
-                            let count = tag.picture_count();
-
-                            if count > 0 {
-                                tag.pictures().first()
-                            } else {
-                                None
-                            }
+                        let front_cover = tagged_file.primary_tag().and_then(|tag| {
+                            tag.get_picture_type(lofty::picture::PictureType::CoverFront)
                         });
 
-                        if let Some(cover) = cover {
+                        if let Some(cover) = front_cover {
                             self.music_cover = Some(cover.data().to_owned());
                             ctx.forget_image(cover_image_uri);
                         }
@@ -93,7 +87,7 @@ impl eframe::App for App {
                     self.music_cover = None;
                 }
 
-                if let Some(cover) = &self.music_cover {
+                if let Some(cover) = &mut self.music_cover {
                     ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
                 }
             });
