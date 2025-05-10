@@ -1,14 +1,21 @@
-use std::io::Seek;
+use std::{io::Seek, time::Duration};
 
 use eframe::egui;
 use lofty::file::TaggedFileExt;
+use rodio::Source;
+
+#[derive(Default)]
+struct Track {
+    front_cover: Option<Vec<u8>>,
+    total_duration: Option<Duration>,
+}
 
 pub struct App {
     /// `OutputStream` must not be dropped.
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
     audio_sink: rodio::Sink,
-    music_cover: Option<Vec<u8>>,
+    track: Option<Track>,
 }
 
 impl Default for App {
@@ -19,7 +26,7 @@ impl Default for App {
         Self {
             audio_stream,
             audio_sink,
-            music_cover: None,
+            track: None,
         }
     }
 }
@@ -34,17 +41,63 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::bottom("controls")
+            .show_separator_line(true)
+            .show(ctx, |ui| {
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    let play_button = ui.add_enabled(
+                        self.audio_sink.is_paused() && !self.audio_sink.empty(),
+                        egui::Button::new("Play"),
+                    );
+                    let pause_button = ui.add_enabled(
+                        !self.audio_sink.is_paused() && !self.audio_sink.empty(),
+                        egui::Button::new("Pause"),
+                    );
+                    let stop_button =
+                        ui.add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"));
+
+                    if play_button.clicked() {
+                        self.audio_sink.play();
+                    }
+                    if pause_button.clicked() {
+                        self.audio_sink.pause();
+                    }
+                    if stop_button.clicked() {
+                        self.audio_sink.clear();
+                        self.track = None;
+                    }
+
+                    if !self.audio_sink.empty() {
+                        let total_duration = if let Some(track) = &self.track {
+                            track.total_duration.map(|t| t.as_secs()).unwrap_or(0)
+                        } else {
+                            0
+                        };
+
+                        ui.label(format!(
+                            "{:02}:{:02} / {:02}:{:02}",
+                            self.audio_sink.get_pos().as_secs() / 60,
+                            self.audio_sink.get_pos().as_secs() % 60,
+                            total_duration / 60,
+                            total_duration % 60
+                        ));
+                        ctx.request_repaint_after(Duration::from_millis(100));
+                    } else {
+                        ui.label("--:-- / --:--");
+                    }
+                });
+                ui.add_space(10.0);
+            });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let cover_image_uri = "bytes://music_cover";
 
-                ui.add(egui::Label::new(
-                    egui::RichText::new("EGUI Music Player").heading(),
-                ));
-
                 if ui.add(egui::Button::new("Open file…")).clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_file() {
                         let mut file = std::fs::File::open(path).unwrap();
+
+                        let mut track = Track::default();
 
                         let tagged_file = lofty::read_from(&mut file).unwrap();
                         let front_cover = tagged_file.primary_tag().and_then(|tag| {
@@ -52,44 +105,29 @@ impl eframe::App for App {
                         });
 
                         if let Some(cover) = front_cover {
-                            self.music_cover = Some(cover.data().to_owned());
+                            track.front_cover = Some(cover.data().to_owned());
                             ctx.forget_image(cover_image_uri);
                         }
 
                         if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
+                            let decoded_audio = rodio::Decoder::try_from(file).unwrap();
+
+                            track.total_duration = decoded_audio.total_duration();
+
                             self.audio_sink.clear();
-                            self.audio_sink
-                                .append(rodio::Decoder::try_from(file).unwrap());
+                            self.audio_sink.append(decoded_audio);
                             self.audio_sink.play();
                         }
+
+                        self.track = Some(track);
                     }
                 }
 
-                let play_button = ui.add_enabled(
-                    self.audio_sink.is_paused() || self.audio_sink.empty(),
-                    egui::Button::new("Play"),
-                );
-                let pause_button = ui.add_enabled(
-                    !self.audio_sink.is_paused() && !self.audio_sink.empty(),
-                    egui::Button::new("Pause"),
-                );
-                let stop_button =
-                    ui.add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"));
-
-                if play_button.clicked() {
-                    self.audio_sink.play();
-                }
-                if pause_button.clicked() {
-                    self.audio_sink.pause();
-                }
-                if stop_button.clicked() {
-                    self.audio_sink.clear();
-                    self.music_cover = None;
-                }
-
-                if let Some(cover) = &mut self.music_cover {
-                    ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
-                }
+                self.track.as_ref().map(|t| {
+                    if let Some(cover) = &t.front_cover {
+                        ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
+                    }
+                })
             });
         });
     }
