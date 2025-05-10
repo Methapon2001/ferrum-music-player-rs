@@ -46,6 +46,8 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
+                    // TODO: Separate this section as controls UI.
+
                     let play_button = ui.add_enabled(
                         self.audio_sink.is_paused() && !self.audio_sink.empty(),
                         egui::Button::new("Play"),
@@ -67,6 +69,8 @@ impl eframe::App for App {
                         self.audio_sink.clear();
                         self.track = None;
                     }
+
+                    // TODO: Volume control. Custom UI?
 
                     if !self.audio_sink.empty() {
                         let total_duration = if let Some(track) = &self.track {
@@ -113,6 +117,11 @@ impl eframe::App for App {
                             let decoded_audio = rodio::Decoder::try_from(file).unwrap();
 
                             track.total_duration = decoded_audio.total_duration();
+
+                            // TODO:
+                            //
+                            // Implement your own queue and sink so
+                            // modify source while playing is possible?
 
                             self.audio_sink.clear();
                             self.audio_sink.append(decoded_audio);
