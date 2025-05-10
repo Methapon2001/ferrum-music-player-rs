@@ -123,11 +123,11 @@ impl eframe::App for App {
                     }
                 }
 
-                self.track.as_ref().map(|t| {
-                    if let Some(cover) = &t.front_cover {
-                        ui.add(egui::Image::from_bytes(cover_image_uri, cover.clone()));
+                if !self.audio_sink.empty() {
+                    if let Some(cover) = self.track.as_ref().and_then(|t| t.front_cover.clone()) {
+                        ui.add(egui::Image::from_bytes(cover_image_uri, cover));
                     }
-                })
+                }
             });
         });
     }
