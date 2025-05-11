@@ -16,6 +16,7 @@ pub struct App {
     audio_stream: rodio::OutputStream,
     audio_sink: rodio::Sink,
     duration: f32,
+    volume: f32,
     track: Option<Track>,
 }
 
@@ -28,6 +29,7 @@ impl Default for App {
             audio_stream,
             audio_sink,
             duration: 0.0,
+            volume: 1.0,
             track: None,
         }
     }
@@ -74,7 +76,21 @@ impl eframe::App for App {
                         self.track = None;
                     }
 
-                    // TODO: Volume control. Custom UI?
+                    ui.separator();
+
+                    {
+                        ui.spacing_mut().slider_width = 75.0;
+                        // TODO: Custom?
+                        let volume_slider = ui.add(
+                            egui::Slider::new(&mut self.volume, 0.0..=1.0)
+                                .handle_shape(slider_handle)
+                                .show_value(false),
+                        );
+                        if volume_slider.dragged() {
+                            self.audio_sink.set_volume(self.volume);
+                        }
+                    }
+
                     ui.separator();
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
