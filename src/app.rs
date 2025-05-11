@@ -15,6 +15,7 @@ pub struct App {
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
     audio_sink: rodio::Sink,
+    duration: f32,
     track: Option<Track>,
 }
 
@@ -26,6 +27,7 @@ impl Default for App {
         Self {
             audio_stream,
             audio_sink,
+            duration: 0.0,
             track: None,
         }
     }
@@ -47,6 +49,8 @@ impl eframe::App for App {
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     // TODO: Separate this section as controls UI.
+
+                    let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
                     let play_button = ui.add_enabled(
                         self.audio_sink.is_paused() && !self.audio_sink.empty(),
@@ -71,25 +75,51 @@ impl eframe::App for App {
                     }
 
                     // TODO: Volume control. Custom UI?
+                    ui.separator();
 
-                    if !self.audio_sink.empty() {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // NOTE: Default to 1.0 so slider handle will be at the start.
                         let total_duration = if let Some(track) = &self.track {
-                            track.total_duration.map(|t| t.as_secs()).unwrap_or(0)
+                            track.total_duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
                         } else {
-                            0
+                            1.0
                         };
 
-                        ui.label(format!(
-                            "{:02}:{:02} / {:02}:{:02}",
-                            self.audio_sink.get_pos().as_secs() / 60,
-                            self.audio_sink.get_pos().as_secs() % 60,
-                            total_duration / 60,
-                            total_duration % 60
-                        ));
-                        ctx.request_repaint_after(Duration::from_millis(100));
-                    } else {
-                        ui.label("--:-- / --:--");
-                    }
+                        self.duration = self.audio_sink.get_pos().as_secs_f32();
+
+                        // TODO: Handle unknown total duration.
+                        if !self.audio_sink.empty() {
+                            ctx.request_repaint_after(Duration::from_millis(100));
+                            ui.label(format!(
+                                "{:02}:{:02} / {:02}:{:02}",
+                                self.duration.trunc() as u64 / 60,
+                                self.duration.trunc() as u64 % 60,
+                                total_duration.trunc() as u64 / 60,
+                                total_duration.trunc() as u64 % 60
+                            ));
+                        } else {
+                            ui.label("--:-- / --:--");
+                        }
+
+                        {
+                            ui.spacing_mut().slider_width = ui.available_width();
+                            let duration_slider = ui.add_enabled(
+                                !self.audio_sink.empty(),
+                                egui::Slider::new(&mut self.duration, 0.0..=total_duration)
+                                    .handle_shape(slider_handle)
+                                    .show_value(false),
+                            );
+                            if duration_slider.dragged() {
+                                self.audio_sink.pause();
+                                self.audio_sink
+                                    .try_seek(Duration::from_secs_f32(self.duration))
+                                    .unwrap();
+                            }
+                            if duration_slider.drag_stopped() {
+                                self.audio_sink.play();
+                            }
+                        }
+                    })
                 });
                 ui.add_space(10.0);
             });
