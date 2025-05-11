@@ -54,6 +54,7 @@ impl eframe::App for App {
 
                     let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
+                    // TODO: New layout and use icon.
                     let play_button = ui.add_enabled(
                         self.audio_sink.is_paused() && !self.audio_sink.empty(),
                         egui::Button::new("Play"),
@@ -183,6 +184,8 @@ impl eframe::App for App {
                         ui.add(egui::Image::from_bytes(cover_image_uri, cover));
                     }
                 }
+
+                // TODO: Scan music and display as table.
             });
         });
     }
