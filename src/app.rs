@@ -4,6 +4,8 @@ use eframe::egui;
 use lofty::file::TaggedFileExt;
 use rodio::Source;
 
+const COVER_IMAGE_URI: &str = "bytes://music_cover";
+
 #[derive(Default)]
 struct Track {
     front_cover: Option<Vec<u8>>,
@@ -142,8 +144,6 @@ impl eframe::App for App {
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                let cover_image_uri = "bytes://music_cover";
-
                 if ui.add(egui::Button::new("Open file…")).clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_file() {
                         let mut file = std::fs::File::open(path).unwrap();
@@ -157,7 +157,7 @@ impl eframe::App for App {
 
                         if let Some(cover) = front_cover {
                             track.front_cover = Some(cover.data().to_owned());
-                            ctx.forget_image(cover_image_uri);
+                            ctx.forget_image(COVER_IMAGE_URI);
                         }
 
                         if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
@@ -181,7 +181,7 @@ impl eframe::App for App {
 
                 if !self.audio_sink.empty() {
                     if let Some(cover) = self.track.as_ref().and_then(|t| t.front_cover.clone()) {
-                        ui.add(egui::Image::from_bytes(cover_image_uri, cover));
+                        ui.add(egui::Image::from_bytes(COVER_IMAGE_URI, cover));
                     }
                 }
 
