@@ -145,7 +145,10 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if ui.add(egui::Button::new("Open file…")).clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("music", &["flac", "wav", "mp3"])
+                        .pick_file()
+                    {
                         let mut file = std::fs::File::open(path).unwrap();
 
                         let mut track = Track::default();
