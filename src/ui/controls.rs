@@ -29,6 +29,14 @@ impl ControllerState {
     }
 }
 
+/// A user interface controller for music playback.
+///
+/// This struct provides the necessary components to control audio playback
+/// and display relevant track information.
+///
+/// It holds references to:
+/// - `audio_sink`: A [`rodio::Sink`](https://docs.rs/rodio/0.20.1/rodio/struct.Sink.html) for managing audio playback controls (play, pause, volume, etc.).
+/// - `track_info`: An optional [`TrackInfo`](#struct.TrackInfo) struct containing metadata for the currently playing track.
 #[derive(Clone)]
 pub struct Controller<'a> {
     audio_sink: &'a rodio::Sink,
