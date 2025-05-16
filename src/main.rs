@@ -1,4 +1,6 @@
 mod app;
+mod common;
+mod ui;
 
 use app::App;
 use eframe::egui;
