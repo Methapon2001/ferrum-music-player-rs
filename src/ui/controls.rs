@@ -90,7 +90,7 @@ impl egui::Widget for Controller<'_> {
                     egui::Slider::new(&mut state.volume, 0.0..=1.0)
                         .handle_shape(slider_handle)
                         .show_value(false)
-                        .step_by(0.1),
+                        .step_by(0.02),
                 );
                 if volume_slider.dragged() {
                     self.audio_sink.set_volume(state.volume);
@@ -129,7 +129,8 @@ impl egui::Widget for Controller<'_> {
                         !self.audio_sink.empty(),
                         egui::Slider::new(&mut state.duration, 0.0..=total_duration)
                             .handle_shape(slider_handle)
-                            .show_value(false),
+                            .show_value(false)
+                            .step_by(0.1),
                     );
                     if duration_slider.dragged() {
                         self.audio_sink.pause();
