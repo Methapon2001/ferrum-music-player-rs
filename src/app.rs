@@ -2,8 +2,10 @@ use std::{io::Seek, sync::Arc};
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
-use lofty::file::TaggedFileExt;
-use rodio::Source;
+use lofty::{
+    file::{AudioFile, TaggedFileExt},
+    tag::Accessor,
+};
 
 use crate::{common::TrackInfo, ui::controls};
 
@@ -15,7 +17,7 @@ pub struct App {
     audio_stream: rodio::OutputStream,
     audio_sink: rodio::Sink,
     track: Option<TrackInfo>,
-    track_list: Option<Vec<std::path::PathBuf>>,
+    track_list: Option<Vec<TrackInfo>>,
 }
 
 impl Default for App {
@@ -83,9 +85,12 @@ impl eframe::App for App {
                 ui.add(controls::Controller::new(&self.audio_sink, &self.track));
 
                 ui.add_space(10.0);
+
+                // TODO: Scan progress.
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()
+                .auto_shrink(false)
                 .drag_to_scroll(true)
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
@@ -105,30 +110,17 @@ impl eframe::App for App {
                                 for item in list {
                                     ui.horizontal(|ui| {
                                         if ui.button("Play").clicked() {
-                                            let mut file = std::fs::File::open(item).unwrap();
+                                            let mut file =
+                                                std::fs::File::open(item.path.as_ref().unwrap())
+                                                    .unwrap();
 
-                                            let mut track_info = TrackInfo::default();
-
-                                            let tagged_file = lofty::read_from(&mut file).unwrap();
-                                            let front_cover =
-                                                tagged_file.primary_tag().and_then(|tag| {
-                                                    tag.get_picture_type(
-                                                        lofty::picture::PictureType::CoverFront,
-                                                    )
-                                                });
-
-                                            if let Some(cover) = front_cover {
-                                                track_info.front_cover =
-                                                    Some(cover.data().to_owned());
+                                            if item.front_cover.is_some() {
                                                 ctx.forget_image(COVER_IMAGE_URI);
                                             }
 
                                             if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
                                                 let decoded_audio =
                                                     rodio::Decoder::try_from(file).unwrap();
-
-                                                track_info.total_duration =
-                                                    decoded_audio.total_duration();
 
                                                 // TODO: Implement your own queue and sink so
                                                 // modify source while playing is possible?
@@ -138,15 +130,23 @@ impl eframe::App for App {
                                                 self.audio_sink.play();
                                             }
 
-                                            self.track = Some(track_info);
+                                            self.track = Some(item.to_owned());
                                         }
-                                        ui.label(item.to_str().unwrap().to_owned());
+
+                                        ui.label(format!(
+                                            "{}.{:02} {} - {} / {}",
+                                            item.disc.to_owned().unwrap_or(1),
+                                            item.track.to_owned().unwrap_or(1),
+                                            item.album.to_owned().unwrap_or("-".to_string()),
+                                            item.title.to_owned().unwrap_or("-".to_string()),
+                                            item.artist.to_owned().unwrap_or("-".to_string()),
+                                        ));
                                     });
                                 }
                             } else if let Some(home) = &mut std::env::home_dir() {
                                 home.push("Music");
-                                // TODO: Read track info and store in sqlite in background.
-                                self.track_list = Some(scan_music_files(home).unwrap());
+                                // TODO: Scan and read track info then store in sqlite in background.
+                                self.track_list = scan_music_files(home).ok();
                             }
                         })
                     })
@@ -155,8 +155,8 @@ impl eframe::App for App {
     }
 }
 
-fn scan_music_files(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
-    let mut list: Vec<std::path::PathBuf> = vec![];
+fn scan_music_files(dir: &std::path::Path) -> std::io::Result<Vec<TrackInfo>> {
+    let mut list: Vec<TrackInfo> = vec![];
 
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
@@ -167,7 +167,30 @@ fn scan_music_files(dir: &std::path::Path) -> std::io::Result<Vec<std::path::Pat
             }
 
             if let Some("flac" | "wav" | "mp3") = path.extension().map(|v| v.to_str().unwrap()) {
-                list.push(path);
+                let tagged_file = lofty::read_from_path(&path).ok();
+
+                // TODO: Store this in sqlite and only load picture only when select or play track.
+                if let Some(info) = tagged_file {
+                    let tag = info.primary_tag().unwrap();
+
+                    let track = TrackInfo {
+                        // front_cover: tag
+                        //     .get_picture_type(lofty::picture::PictureType::CoverFront)
+                        //     .map(|v| v.data().to_owned()),
+                        front_cover: None,
+                        disc: tag.disk(),
+                        disc_total: tag.disk_total(),
+                        track: tag.track(),
+                        track_total: tag.track_total(),
+                        album: tag.album().map(|v| v.to_string()),
+                        artist: tag.artist().map(|v| v.to_string()),
+                        title: tag.title().map(|v| v.to_string()),
+                        total_duration: Some(info.properties().duration()),
+                        path: Some(path),
+                    };
+
+                    list.push(track);
+                }
             }
         }
     }
