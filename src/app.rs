@@ -134,10 +134,10 @@ impl eframe::App for App {
                                         }
 
                                         ui.label(format!(
-                                            "{}.{:02} {} - {} / {}",
+                                            "{} - {}.{:02} {} / {}",
+                                            item.album.to_owned().unwrap_or("-".to_string()),
                                             item.disc.to_owned().unwrap_or(1),
                                             item.track.to_owned().unwrap_or(1),
-                                            item.album.to_owned().unwrap_or("-".to_string()),
                                             item.title.to_owned().unwrap_or("-".to_string()),
                                             item.artist.to_owned().unwrap_or("-".to_string()),
                                         ));
