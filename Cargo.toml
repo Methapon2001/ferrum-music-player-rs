@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 eframe = { version = "0.31.1" }
+font-kit = "0.14.3"
 image = { version = "0.25.6", features = ["png", "jpeg"] }
 lofty = "0.22.4"
 mpris = "2.0.1"
