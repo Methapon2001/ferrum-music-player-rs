@@ -155,45 +155,90 @@ impl eframe::App for App {
     }
 }
 
-fn scan_music_files(dir: &std::path::Path) -> std::io::Result<Vec<TrackInfo>> {
+/// Scans the given path for music files and reads their metadata.
+///
+/// This function recursively traverses directories, collecting `TrackInfo` for supported
+/// music file types (`.flac`, `.wav`, `.mp3`).
+///
+/// # Arguments
+///
+/// * `path` - The starting path to scan. This can be a file or a directory.
+///
+/// # Returns
+///
+/// A `Result` which is:
+/// - `Ok(Vec<TrackInfo>)` containing a list of `TrackInfo` for all music files found.
+/// - `Err(std::io::Error)` if an I/O error occurs during directory traversal.
+fn scan_music_files(path: &std::path::Path) -> std::io::Result<Vec<TrackInfo>> {
     let mut list: Vec<TrackInfo> = vec![];
 
-    if dir.is_dir() {
-        for entry in std::fs::read_dir(dir)? {
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path)? {
             let path = entry?.path();
 
             if path.is_dir() {
                 list.append(&mut scan_music_files(&path)?);
             }
 
-            if let Some("flac" | "wav" | "mp3") = path.extension().map(|v| v.to_str().unwrap()) {
-                let tagged_file = lofty::read_from_path(&path).ok();
-
-                // TODO: Store this in sqlite and only load picture only when select or play track.
-                if let Some(info) = tagged_file {
-                    let tag = info.primary_tag().unwrap();
-
-                    let track = TrackInfo {
-                        // front_cover: tag
-                        //     .get_picture_type(lofty::picture::PictureType::CoverFront)
-                        //     .map(|v| v.data().to_owned()),
-                        front_cover: None,
-                        disc: tag.disk(),
-                        disc_total: tag.disk_total(),
-                        track: tag.track(),
-                        track_total: tag.track_total(),
-                        album: tag.album().map(|v| v.to_string()),
-                        artist: tag.artist().map(|v| v.to_string()),
-                        title: tag.title().map(|v| v.to_string()),
-                        total_duration: Some(info.properties().duration()),
-                        path: Some(path),
-                    };
-
-                    list.push(track);
-                }
+            if let Some(track_info) = read_music_file(&path).unwrap_or(None) {
+                list.push(track_info);
             }
         }
     }
 
+    if let Some(track_info) = read_music_file(path).unwrap_or(None) {
+        list.push(track_info);
+    }
+
+    // TODO: Handle error and display error.
+
     Ok(list)
+}
+
+/// Reads metadata from a single music file.
+///
+/// This function attempts to read metadata from files with `.flac`, `.wav`, or `.mp3`
+/// extensions using the `lofty` crate. It returns a `Result` to indicate whether the
+/// operation was successful and an `Option<TrackInfo>` to represent if a primary tag
+/// was found within the file.
+///
+/// # Arguments
+///
+/// * `path` - The path to the music file.
+///
+/// # Returns
+///
+/// A `Result<Option<TrackInfo>, lofty::error::LoftyError>`:
+/// - `Ok(Some(TrackInfo))` if the file is a supported music format and a primary tag
+///   with metadata was successfully read.
+/// - `Ok(None)` if the file is not a supported music format (based on its extension).
+/// - `Err(lofty::error::LoftyError)` if an error occurred while reading the music file
+///   or its tags
+fn read_music_file(
+    path: &std::path::Path,
+) -> std::result::Result<Option<TrackInfo>, lofty::error::LoftyError> {
+    if let Some("flac" | "wav" | "mp3") = path.extension().and_then(|v| v.to_str()) {
+        // TODO: Store this in sqlite and only load picture only when select or play track.
+        let tagged = lofty::read_from_path(path)?;
+
+        Ok(tagged.primary_tag().map(|tag| {
+            TrackInfo {
+                // front_cover: tag
+                //     .get_picture_type(lofty::picture::PictureType::CoverFront)
+                //     .map(|v| v.data().to_owned()),
+                front_cover: None,
+                disc: tag.disk(),
+                disc_total: tag.disk_total(),
+                track: tag.track(),
+                track_total: tag.track_total(),
+                album: tag.album().map(|v| v.to_string()),
+                artist: tag.artist().map(|v| v.to_string()),
+                title: tag.title().map(|v| v.to_string()),
+                total_duration: Some(tagged.properties().duration()),
+                path: Some(path.to_owned()),
+            }
+        }))
+    } else {
+        Ok(None)
+    }
 }
