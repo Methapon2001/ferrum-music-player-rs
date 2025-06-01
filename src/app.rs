@@ -108,6 +108,13 @@ impl eframe::App for App {
                                     egui::Image::from_bytes(COVER_IMAGE_URI, cover),
                                 );
                             }
+                        } else {
+                            ui.add_sized(
+                                [256.0, 256.0],
+                                egui::Image::new(egui::include_image!(
+                                    "../assets/album-placeholder.png"
+                                )),
+                            );
                         }
 
                         ui.vertical(|ui| {
