@@ -114,7 +114,13 @@ impl eframe::App for App {
                                                 std::fs::File::open(item.path.as_ref().unwrap())
                                                     .unwrap();
 
-                                            if item.front_cover.is_some() {
+                                            let mut track = item.to_owned();
+
+                                            if let Ok(front_cover) = track.read_front_cover() {
+                                                track.front_cover = front_cover;
+                                            }
+
+                                            if track.front_cover.is_some() {
                                                 ctx.forget_image(COVER_IMAGE_URI);
                                             }
 
@@ -130,7 +136,7 @@ impl eframe::App for App {
                                                 self.audio_sink.play();
                                             }
 
-                                            self.track = Some(item.to_owned());
+                                            self.track = Some(track);
                                         }
 
                                         ui.label(format!(
@@ -221,22 +227,17 @@ fn read_music_file(
         // TODO: Store this in sqlite and only load picture only when select or play track.
         let tagged = lofty::read_from_path(path)?;
 
-        Ok(tagged.primary_tag().map(|tag| {
-            TrackInfo {
-                // front_cover: tag
-                //     .get_picture_type(lofty::picture::PictureType::CoverFront)
-                //     .map(|v| v.data().to_owned()),
-                front_cover: None,
-                disc: tag.disk(),
-                disc_total: tag.disk_total(),
-                track: tag.track(),
-                track_total: tag.track_total(),
-                album: tag.album().map(|v| v.to_string()),
-                artist: tag.artist().map(|v| v.to_string()),
-                title: tag.title().map(|v| v.to_string()),
-                total_duration: Some(tagged.properties().duration()),
-                path: Some(path.to_owned()),
-            }
+        Ok(tagged.primary_tag().map(|tag| TrackInfo {
+            front_cover: None,
+            disc: tag.disk(),
+            disc_total: tag.disk_total(),
+            track: tag.track(),
+            track_total: tag.track_total(),
+            album: tag.album().map(|v| v.to_string()),
+            artist: tag.artist().map(|v| v.to_string()),
+            title: tag.title().map(|v| v.to_string()),
+            total_duration: Some(tagged.properties().duration()),
+            path: Some(path.to_owned()),
         }))
     } else {
         Ok(None)
