@@ -115,7 +115,7 @@ impl egui::Widget for Controller<'_> {
                     ui.label(format!(
                         "{:02}:{:02} / {:02}:{:02}",
                         state.duration.trunc() as u64 / 60,
-                        state.volume.trunc() as u64 % 60,
+                        state.duration.trunc() as u64 % 60,
                         total_duration.trunc() as u64 / 60,
                         total_duration.trunc() as u64 % 60
                     ));
