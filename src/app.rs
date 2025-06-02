@@ -99,23 +99,19 @@ impl eframe::App for App {
                 .drag_to_scroll(true)
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
+                        let mut cover_image = egui::Image::new(egui::include_image!(
+                            "../assets/album-placeholder.png"
+                        ));
+
                         if !self.audio_sink.empty() {
                             if let Some(cover) =
                                 self.track.as_ref().and_then(|t| t.front_cover.clone())
                             {
-                                ui.add_sized(
-                                    [256.0, 256.0],
-                                    egui::Image::from_bytes(COVER_IMAGE_URI, cover),
-                                );
+                                cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover);
                             }
-                        } else {
-                            ui.add_sized(
-                                [256.0, 256.0],
-                                egui::Image::new(egui::include_image!(
-                                    "../assets/album-placeholder.png"
-                                )),
-                            );
                         }
+
+                        ui.add_sized([256.0, 256.0], cover_image);
 
                         ui.vertical(|ui| {
                             if let Some(list) = &self.track_list {
