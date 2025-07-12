@@ -73,7 +73,7 @@ impl App {
 
         // TODO: Make this configurable.
         cc.egui_ctx.options_mut(|options| {
-            options.line_scroll_speed = 100.0;
+            options.input_options.line_scroll_speed = 100.0;
         });
 
         Self::default()
