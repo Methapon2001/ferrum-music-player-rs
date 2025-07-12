@@ -96,7 +96,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
-                .drag_to_scroll(true)
+                .scroll_source(egui::scroll_area::ScrollSource::ALL)
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let mut cover_image = egui::Image::new(egui::include_image!(
