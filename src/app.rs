@@ -18,6 +18,7 @@ pub struct App {
     audio_sink: rodio::Sink,
     track_info: Option<TrackInfo>,
     track_list: Option<Vec<TrackInfo>>,
+    search_text: String,
 }
 
 impl Default for App {
@@ -25,11 +26,18 @@ impl Default for App {
         let audio_stream = rodio::OutputStreamBuilder::open_default_stream().unwrap();
         let audio_sink = rodio::Sink::connect_new(audio_stream.mixer());
 
+        let track_list = if let Some(home) = &mut std::env::home_dir() {
+            scan_music_files(&home.join("Music")).ok()
+        } else {
+            None
+        };
+
         Self {
             audio_stream,
             audio_sink,
+            track_list,
             track_info: None,
-            track_list: None,
+            search_text: String::new(),
         }
     }
 }
@@ -96,78 +104,93 @@ impl eframe::App for App {
 
                 // TODO: Scan progress.
             });
+
+        egui::SidePanel::left("music_metadata")
+            .resizable(false)
+            .show(ctx, |ui| {
+                let mut cover_image =
+                    egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
+
+                if !self.audio_sink.empty() {
+                    if let Some(cover) =
+                        self.track_info.as_ref().and_then(|t| t.front_cover.clone())
+                    {
+                        cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover)
+                            .show_loading_spinner(false);
+                    }
+                }
+
+                ui.add_sized([256.0, 256.0], cover_image);
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
                 .scroll_source(egui::scroll_area::ScrollSource::ALL)
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let mut cover_image = egui::Image::new(egui::include_image!(
-                            "../assets/album-placeholder.png"
-                        ));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.search_text)
+                            .desired_width(ui.available_width())
+                            .hint_text("Search"),
+                    );
 
-                        if !self.audio_sink.empty() {
-                            if let Some(cover) =
-                                self.track_info.as_ref().and_then(|t| t.front_cover.clone())
+                    ui.add_space(10.0);
+
+                    if let Some(list) = &self.track_list {
+                        for item in list {
+                            let display_text = format!(
+                                "{} - {}.{:02} {} / {}",
+                                item.album.to_owned().unwrap_or("-".to_string()),
+                                item.disc.to_owned().unwrap_or(1),
+                                item.track.to_owned().unwrap_or(1),
+                                item.title.to_owned().unwrap_or("-".to_string()),
+                                item.artist.to_owned().unwrap_or("-".to_string()),
+                            );
+
+                            if !self.search_text.is_empty()
+                                && !display_text
+                                    .to_lowercase()
+                                    .contains(&self.search_text.to_lowercase())
                             {
-                                cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover);
+                                continue;
                             }
-                        }
 
-                        ui.add_sized([256.0, 256.0], cover_image);
+                            ui.horizontal(|ui| {
+                                if ui.button("Play").clicked() {
+                                    let mut file =
+                                        std::fs::File::open(item.path.as_ref().unwrap()).unwrap();
 
-                        ui.vertical(|ui| {
-                            if let Some(list) = &self.track_list {
-                                for item in list {
-                                    ui.horizontal(|ui| {
-                                        if ui.button("Play").clicked() {
-                                            let mut file =
-                                                std::fs::File::open(item.path.as_ref().unwrap())
-                                                    .unwrap();
+                                    let mut track = item.to_owned();
 
-                                            let mut track = item.to_owned();
+                                    if let Ok(front_cover) = track.read_front_cover() {
+                                        track.front_cover = front_cover;
+                                    }
 
-                                            if let Ok(front_cover) = track.read_front_cover() {
-                                                track.front_cover = front_cover;
-                                            }
+                                    if let Some(current_track) = self.track_info.as_ref()
+                                        && current_track.front_cover != track.front_cover
+                                    {
+                                        ctx.forget_image(COVER_IMAGE_URI);
+                                    }
 
-                                            if track.front_cover.is_some() {
-                                                ctx.forget_image(COVER_IMAGE_URI);
-                                            }
+                                    if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
+                                        let decoded_audio = rodio::Decoder::try_from(file).unwrap();
 
-                                            if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
-                                                let decoded_audio =
-                                                    rodio::Decoder::try_from(file).unwrap();
+                                        // TODO: Implement your own queue and sink so
+                                        // modify source while playing is possible?
 
-                                                // TODO: Implement your own queue and sink so
-                                                // modify source while playing is possible?
+                                        self.audio_sink.clear();
+                                        self.audio_sink.append(decoded_audio);
+                                        self.audio_sink.play();
+                                    }
 
-                                                self.audio_sink.clear();
-                                                self.audio_sink.append(decoded_audio);
-                                                self.audio_sink.play();
-                                            }
-
-                                            self.track_info = Some(track);
-                                        }
-
-                                        ui.label(format!(
-                                            "{} - {}.{:02} {} / {}",
-                                            item.album.to_owned().unwrap_or("-".to_string()),
-                                            item.disc.to_owned().unwrap_or(1),
-                                            item.track.to_owned().unwrap_or(1),
-                                            item.title.to_owned().unwrap_or("-".to_string()),
-                                            item.artist.to_owned().unwrap_or("-".to_string()),
-                                        ));
-                                    });
+                                    self.track_info = Some(track);
                                 }
-                            } else if let Some(home) = &mut std::env::home_dir() {
-                                home.push("Music");
-                                // TODO: Scan and read track info then store in sqlite in background.
-                                self.track_list = scan_music_files(home).ok();
-                            }
-                        })
-                    })
-                });
+
+                                ui.label(display_text);
+                            });
+                        }
+                    }
+                })
         });
     }
 }
