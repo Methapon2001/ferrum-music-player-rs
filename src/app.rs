@@ -16,7 +16,7 @@ pub struct App {
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
     audio_sink: rodio::Sink,
-    track: Option<TrackInfo>,
+    track_info: Option<TrackInfo>,
     track_list: Option<Vec<TrackInfo>>,
 }
 
@@ -28,7 +28,7 @@ impl Default for App {
         Self {
             audio_stream,
             audio_sink,
-            track: None,
+            track_info: None,
             track_list: None,
         }
     }
@@ -87,7 +87,10 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.add_space(10.0);
 
-                ui.add(controls::Controller::new(&self.audio_sink, &self.track));
+                ui.add(controls::Controller::new(
+                    &self.audio_sink,
+                    &self.track_info,
+                ));
 
                 ui.add_space(10.0);
 
@@ -105,7 +108,7 @@ impl eframe::App for App {
 
                         if !self.audio_sink.empty() {
                             if let Some(cover) =
-                                self.track.as_ref().and_then(|t| t.front_cover.clone())
+                                self.track_info.as_ref().and_then(|t| t.front_cover.clone())
                             {
                                 cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover);
                             }
@@ -144,7 +147,7 @@ impl eframe::App for App {
                                                 self.audio_sink.play();
                                             }
 
-                                            self.track = Some(track);
+                                            self.track_info = Some(track);
                                         }
 
                                         ui.label(format!(
