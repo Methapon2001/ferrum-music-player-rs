@@ -11,7 +11,7 @@ fn main() -> eframe::Result {
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([800.0, 450.0])
-                .with_min_inner_size([600.0, 300.0]),
+                .with_min_inner_size([650.0, 300.0]),
             ..Default::default()
         },
         Box::new(|cc| Ok(Box::new(App::new(cc)))),

@@ -120,7 +120,7 @@ impl eframe::App for App {
                     }
                 }
 
-                ui.add_sized([256.0, 256.0], cover_image);
+                ui.add_sized([320.0, 320.0], cover_image);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -128,9 +128,10 @@ impl eframe::App for App {
                 .auto_shrink(false)
                 .scroll_source(egui::scroll_area::ScrollSource::ALL)
                 .show(ui, |ui| {
-                    ui.add(
+                    ui.add_sized(
+                        [ui.available_width(), 30.0],
                         egui::TextEdit::singleline(&mut self.search_text)
-                            .desired_width(ui.available_width())
+                            .vertical_align(egui::Align::Center)
                             .hint_text("Search"),
                     );
 
