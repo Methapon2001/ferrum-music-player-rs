@@ -19,7 +19,7 @@ features = ["symphonia-flac", "symphonia-wav", "symphonia-mp3"]
 [dependencies.egui_extras]
 package = "egui_extras"
 version = "0.32.0"
-features = ["image"]
+features = ["image", "svg"]
 
 [profile.dev]
 opt-level = 1

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use eframe::egui;
+use eframe::egui::{self, Color32, Stroke, include_image};
 
 use crate::common::TrackInfo;
 
@@ -60,23 +60,38 @@ impl egui::Widget for Controller<'_> {
         ui.horizontal(|ui| {
             let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
-            // TODO: New layout and use icon.
-            let play_button = ui.add_enabled(
-                self.audio_sink.is_paused() && !self.audio_sink.empty(),
-                egui::Button::new("Play"),
+            let toggle_button = ui.add_enabled(
+                !self.audio_sink.empty(),
+                egui::Button::new(if self.audio_sink.is_paused() || self.audio_sink.empty() {
+                    (
+                        egui::Image::new(include_image!("../../assets/icons/play.svg")),
+                        "Play",
+                    )
+                } else {
+                    (
+                        egui::Image::new(include_image!("../../assets/icons/pause.svg")),
+                        "Pause",
+                    )
+                })
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE),
             );
-            let pause_button = ui.add_enabled(
-                !self.audio_sink.is_paused() && !self.audio_sink.empty(),
-                egui::Button::new("Pause"),
+            let stop_button = ui.add_enabled(
+                !self.audio_sink.empty(),
+                egui::Button::new((
+                    egui::Image::new(include_image!("../../assets/icons/stop.svg")),
+                    "Stop",
+                ))
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE),
             );
-            let stop_button = ui.add_enabled(!self.audio_sink.empty(), egui::Button::new("Stop"));
 
-            if play_button.clicked() {
-                self.audio_sink.play();
+            match (toggle_button.clicked(), self.audio_sink.is_paused()) {
+                (true, true) => self.audio_sink.play(),
+                (true, false) => self.audio_sink.pause(),
+                _ => {}
             }
-            if pause_button.clicked() {
-                self.audio_sink.pause();
-            }
+
             if stop_button.clicked() {
                 self.audio_sink.clear();
             }
