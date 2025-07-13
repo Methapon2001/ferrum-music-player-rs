@@ -120,7 +120,7 @@ impl eframe::App for App {
                     }
                 }
 
-                ui.add_sized([320.0, 320.0], cover_image);
+                ui.add_sized([275.0, 275.0], cover_image);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
