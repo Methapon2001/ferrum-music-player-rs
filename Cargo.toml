@@ -12,8 +12,7 @@ mpris = "2.0.1"
 rfd = { version = "0.15.3", features = ["xdg-portal"] }
 
 [dependencies.rodio]
-git = "https://github.com/RustAudio/rodio.git"
-branch = "master"
+version = "0.21.1"
 features = ["symphonia-flac", "symphonia-wav", "symphonia-mp3"]
 
 [dependencies.egui_extras]
