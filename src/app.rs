@@ -1,4 +1,4 @@
-use std::{io::Seek, sync::Arc};
+use std::{io::Seek, sync::Arc, thread};
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
@@ -15,7 +15,7 @@ pub struct App {
     /// `OutputStream` must not be dropped.
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
-    audio_sink: rodio::Sink,
+    audio_sink: Arc<rodio::Sink>,
     track_info: Option<TrackInfo>,
     track_list: Option<Vec<TrackInfo>>,
     search_text: String,
@@ -24,13 +24,21 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         let audio_stream = rodio::OutputStreamBuilder::open_default_stream().unwrap();
-        let audio_sink = rodio::Sink::connect_new(audio_stream.mixer());
+        let audio_sink = Arc::new(rodio::Sink::connect_new(audio_stream.mixer()));
 
         let track_list = if let Some(home) = &mut std::env::home_dir() {
             scan_music_files(&home.join("Music")).ok()
         } else {
             None
         };
+
+        // TODO: Implement mpris server within another thread to controls sink
+        //
+        // let sink = audio_sink.clone();
+        //
+        // thread::spawn(move || {
+        //     sink.clear();
+        // });
 
         Self {
             audio_stream,
