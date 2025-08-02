@@ -158,9 +158,17 @@ impl eframe::App for App {
 
                             ui.horizontal(|ui| {
                                 if ui.button("Play").clicked() {
-                                    let mut file =
-                                        std::fs::File::open(item.path.as_ref().unwrap()).unwrap();
+                                    let file = item
+                                        .path
+                                        .as_ref()
+                                        .map(std::fs::File::open)
+                                        .and_then(|v| v.ok());
 
+                                    if file.is_none() {
+                                        return;
+                                    }
+
+                                    let mut file = file.unwrap();
                                     let mut track = item.to_owned();
 
                                     if let Ok(front_cover) = track.read_front_cover() {
