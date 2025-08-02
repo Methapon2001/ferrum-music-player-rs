@@ -8,6 +8,7 @@ eframe = { version = "0.32.0" }
 font-kit = "0.14.3"
 image = { version = "0.25.6", features = ["png", "jpeg"] }
 lofty = "0.22.4"
+mpris-server = "0.9.0"
 rfd = { version = "0.15.3", features = ["xdg-portal"] }
 
 [dependencies.rodio]
