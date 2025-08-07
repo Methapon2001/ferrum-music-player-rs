@@ -16,7 +16,7 @@ pub struct App {
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
     audio_sink: Arc<rodio::Sink>,
-    track_info: Option<TrackInfo>,
+    current_track: Option<TrackInfo>,
     track_list: Option<Vec<TrackInfo>>,
     search_text: String,
 }
@@ -44,7 +44,7 @@ impl Default for App {
             audio_stream,
             audio_sink,
             track_list,
-            track_info: None,
+            current_track: None,
             search_text: String::new(),
         }
     }
@@ -105,7 +105,7 @@ impl eframe::App for App {
 
                 ui.add(controls::Controller::new(
                     &self.audio_sink,
-                    &self.track_info,
+                    &self.current_track,
                 ));
 
                 ui.add_space(10.0);
@@ -120,8 +120,10 @@ impl eframe::App for App {
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
                 if !self.audio_sink.empty() {
-                    if let Some(cover) =
-                        self.track_info.as_ref().and_then(|t| t.front_cover.clone())
+                    if let Some(cover) = self
+                        .current_track
+                        .as_ref()
+                        .and_then(|t| t.front_cover.clone())
                     {
                         cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover)
                             .show_loading_spinner(false);
@@ -129,6 +131,23 @@ impl eframe::App for App {
                 }
 
                 ui.add_sized([275.0, 275.0], cover_image);
+
+                if let Some(current_track) = &self.current_track {
+                    ui.vertical_centered(|ui| {
+                        match (current_track.album.clone(), current_track.title.clone()) {
+                            (Some(album), Some(title)) => {
+                                ui.heading(format!("{album} - {title}"));
+                            }
+                            (Some(album), None) => {
+                                ui.heading(album);
+                            }
+                            (None, Some(title)) => {
+                                ui.heading(title);
+                            }
+                            (None, None) => {}
+                        }
+                    });
+                }
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -183,7 +202,7 @@ impl eframe::App for App {
                                         track.front_cover = front_cover;
                                     }
 
-                                    if let Some(current_track) = self.track_info.as_ref()
+                                    if let Some(current_track) = self.current_track.as_ref()
                                         && current_track.front_cover != track.front_cover
                                     {
                                         ctx.forget_image(COVER_IMAGE_URI);
@@ -200,7 +219,7 @@ impl eframe::App for App {
                                         self.audio_sink.play();
                                     }
 
-                                    self.track_info = Some(track);
+                                    self.current_track = Some(track);
                                 }
 
                                 ui.label(display_text);
