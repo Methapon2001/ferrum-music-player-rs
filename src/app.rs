@@ -132,7 +132,9 @@ impl eframe::App for App {
 
                 ui.add_sized([275.0, 275.0], cover_image);
 
-                if let Some(current_track) = &self.current_track {
+                if let Some(current_track) = &self.current_track
+                    && !self.audio_sink.empty()
+                {
                     ui.vertical_centered(|ui| {
                         match (current_track.album.clone(), current_track.title.clone()) {
                             (Some(album), Some(title)) => {
