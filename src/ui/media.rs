@@ -2,15 +2,15 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Stroke, include_image};
 
-use crate::track::Track;
+use crate::player::MediaPlayer;
 
 #[derive(Clone)]
-struct ControllerState {
+struct ControlPanelState {
     volume: f32,
     duration: f32,
 }
 
-impl Default for ControllerState {
+impl Default for ControlPanelState {
     fn default() -> Self {
         Self {
             volume: 1.0,
@@ -19,7 +19,7 @@ impl Default for ControllerState {
     }
 }
 
-impl ControllerState {
+impl ControlPanelState {
     pub fn load(ctx: &egui::Context, id: egui::Id) -> Option<Self> {
         ctx.data_mut(|d| d.get_persisted(id))
     }
@@ -29,37 +29,27 @@ impl ControllerState {
     }
 }
 
-/// A user interface controller for music playback.
-///
-/// This struct provides the necessary components to control audio playback
-/// and display relevant track information.
-///
-/// It holds references to:
-/// - `audio_sink`: A [`rodio::Sink`](https://docs.rs/rodio/0.20.1/rodio/struct.Sink.html) for managing audio playback controls (play, pause, volume, etc.).
-/// - `track_info`: An optional [`TrackInfo`](#struct.TrackInfo) struct containing metadata for the currently playing track.
-#[derive(Clone)]
-pub struct Controller<'a> {
-    sink: &'a rodio::Sink,
-    track: &'a Option<Track>,
+pub struct ControlPanel<'a> {
+    player: &'a mut MediaPlayer,
 }
 
-impl<'a> Controller<'a> {
-    pub fn new(sink: &'a rodio::Sink, track: &'a Option<Track>) -> Self {
-        Self { track, sink }
+impl<'a> ControlPanel<'a> {
+    pub fn new(player: &'a mut MediaPlayer) -> Self {
+        Self { player }
     }
 }
 
-impl egui::Widget for Controller<'_> {
+impl egui::Widget for ControlPanel<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let id = ui.next_auto_id();
-        let mut state = ControllerState::load(ui.ctx(), id).unwrap_or_default();
+        let mut state = ControlPanelState::load(ui.ctx(), id).unwrap_or_default();
 
         ui.horizontal(|ui| {
             let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
             let toggle_button = ui.add_enabled(
-                !self.sink.empty(),
-                egui::Button::new(if self.sink.is_paused() || self.sink.empty() {
+                !self.player.is_empty(),
+                egui::Button::new(if self.player.is_paused() || self.player.is_empty() {
                     (
                         egui::Image::new(include_image!("../../assets/icons/play.svg")),
                         "Play",
@@ -74,7 +64,7 @@ impl egui::Widget for Controller<'_> {
                 .stroke(Stroke::NONE),
             );
             let stop_button = ui.add_enabled(
-                !self.sink.empty(),
+                !self.player.is_empty(),
                 egui::Button::new((
                     egui::Image::new(include_image!("../../assets/icons/stop.svg")),
                     "Stop",
@@ -83,18 +73,18 @@ impl egui::Widget for Controller<'_> {
                 .stroke(Stroke::NONE),
             );
 
-            match (toggle_button.clicked(), self.sink.is_paused()) {
+            match (toggle_button.clicked(), self.player.is_paused()) {
                 (true, true) => {
-                    self.sink.play();
+                    self.player.play();
                 }
                 (true, false) => {
-                    self.sink.pause();
+                    self.player.pause();
                 }
                 _ => {}
             }
 
             if stop_button.clicked() {
-                self.sink.clear();
+                self.player.stop();
             }
 
             ui.separator();
@@ -109,7 +99,7 @@ impl egui::Widget for Controller<'_> {
                         .step_by(0.02),
                 );
                 if volume_slider.dragged() {
-                    self.sink.set_volume(state.volume);
+                    self.player.set_volume(state.volume);
                 }
             }
 
@@ -117,16 +107,16 @@ impl egui::Widget for Controller<'_> {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // NOTE: Default to 1.0 so slider handle will be at the start.
-                let total_duration = if let Some(track) = &self.track {
+                let total_duration = if let Some(track) = &self.player.get_track() {
                     track.total_duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
                 } else {
                     1.0
                 };
 
-                state.duration = self.sink.get_pos().as_secs_f32();
+                state.duration = self.player.get_position().as_secs_f32();
 
                 // TODO: Handle unknown total duration.
-                if !self.sink.empty() {
+                if !self.player.is_empty() {
                     ui.ctx().request_repaint_after(Duration::from_millis(100));
                     ui.label(format!(
                         "{:02}:{:02} / {:02}:{:02}",
@@ -142,20 +132,18 @@ impl egui::Widget for Controller<'_> {
                 {
                     ui.spacing_mut().slider_width = ui.available_width();
                     let duration_slider = ui.add_enabled(
-                        !self.sink.empty(),
+                        !self.player.is_empty(),
                         egui::Slider::new(&mut state.duration, 0.0..=total_duration)
                             .handle_shape(slider_handle)
                             .show_value(false)
                             .step_by(0.1),
                     );
                     if duration_slider.dragged() {
-                        self.sink.pause();
-                        self.sink
-                            .try_seek(Duration::from_secs_f32(state.duration))
-                            .unwrap();
+                        self.player.pause();
+                        self.player.seek(Duration::from_secs_f32(state.duration))
                     }
                     if duration_slider.drag_stopped() {
-                        self.sink.play();
+                        self.player.play();
                     }
                 }
             });

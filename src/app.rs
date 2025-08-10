@@ -1,4 +1,7 @@
-use std::{io::Seek, sync::Arc};
+use std::{
+    sync::{Arc, mpsc},
+    thread,
+};
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
@@ -7,47 +10,14 @@ use lofty::{
     tag::Accessor,
 };
 
-use crate::{track::Track, ui::controls};
+use crate::{player::MediaPlayer, track::Track, ui};
 
 const COVER_IMAGE_URI: &str = "bytes://music_cover";
 
 pub struct App {
-    /// `OutputStream` must not be dropped.
-    #[allow(dead_code)]
-    audio_stream: rodio::OutputStream,
-    audio_sink: Arc<rodio::Sink>,
-    current_track: Option<Track>,
-    track_list: Option<Vec<Track>>,
-    search_text: String,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        let audio_stream = rodio::OutputStreamBuilder::open_default_stream().unwrap();
-        let audio_sink = Arc::new(rodio::Sink::connect_new(audio_stream.mixer()));
-
-        let track_list = if let Some(home) = &mut std::env::home_dir() {
-            scan_music_files(&home.join("Music")).ok()
-        } else {
-            None
-        };
-
-        // TODO: Implement mpris server within another thread to controls sink
-        //
-        // let sink = audio_sink.clone();
-        //
-        // thread::spawn(move || {
-        //     sink.clear();
-        // });
-
-        Self {
-            audio_stream,
-            audio_sink,
-            track_list,
-            current_track: None,
-            search_text: String::new(),
-        }
-    }
+    player: MediaPlayer,
+    tracks: Option<Vec<Track>>,
+    search: String,
 }
 
 impl App {
@@ -92,21 +62,42 @@ impl App {
             options.input_options.line_scroll_speed = 100.0;
         });
 
-        Self::default()
+        let tracks = if let Some(home) = &mut std::env::home_dir() {
+            scan_music_files(&home.join("Music")).ok()
+        } else {
+            None
+        };
+
+        let ctx = cc.egui_ctx.clone();
+        let (player_tx, player_rx) = mpsc::sync_channel(0);
+
+        thread::spawn(move || {
+            loop {
+                let _ = player_rx.recv();
+
+                // TODO: Handle event(s)?
+                ctx.request_repaint();
+            }
+        });
+
+        Self {
+            player: MediaPlayer::new(player_tx),
+            search: String::new(),
+            tracks,
+        }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.player.mpris_handler();
+
         egui::TopBottomPanel::bottom("controls")
             .show_separator_line(true)
             .show(ctx, |ui| {
                 ui.add_space(10.0);
 
-                ui.add(controls::Controller::new(
-                    &self.audio_sink,
-                    &self.current_track,
-                ));
+                ui.add(ui::media::ControlPanel::new(&mut self.player));
 
                 ui.add_space(10.0);
 
@@ -119,9 +110,10 @@ impl eframe::App for App {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
-                if !self.audio_sink.empty() {
+                if !self.player.is_empty() {
                     if let Some(cover) = self
-                        .current_track
+                        .player
+                        .get_track()
                         .as_ref()
                         .and_then(|t| t.front_cover.clone())
                     {
@@ -132,11 +124,14 @@ impl eframe::App for App {
 
                 ui.add_sized([275.0, 275.0], cover_image);
 
-                if let Some(current_track) = &self.current_track
-                    && !self.audio_sink.empty()
+                if let Some(current_track) = self.player.get_track()
+                    && !self.player.is_empty()
                 {
                     ui.vertical_centered(|ui| {
-                        match (current_track.album.clone(), current_track.title.clone()) {
+                        match (
+                            current_track.album.as_deref(),
+                            current_track.title.as_deref(),
+                        ) {
                             (Some(album), Some(title)) => {
                                 ui.heading(format!("{album} - {title}"));
                             }
@@ -159,14 +154,14 @@ impl eframe::App for App {
                 .show(ui, |ui| {
                     ui.add_sized(
                         [ui.available_width(), 30.0],
-                        egui::TextEdit::singleline(&mut self.search_text)
+                        egui::TextEdit::singleline(&mut self.search)
                             .vertical_align(egui::Align::Center)
                             .hint_text("Search"),
                     );
 
                     ui.add_space(10.0);
 
-                    if let Some(list) = &self.track_list {
+                    if let Some(list) = &self.tracks {
                         for item in list {
                             let display_text = format!(
                                 "{} - {}.{:02} {} / {}",
@@ -177,51 +172,30 @@ impl eframe::App for App {
                                 item.artist.as_deref().unwrap_or("-"),
                             );
 
-                            if !self.search_text.is_empty()
+                            if !self.search.is_empty()
                                 && !display_text
                                     .to_lowercase()
-                                    .contains(&self.search_text.to_lowercase())
+                                    .contains(&self.search.to_lowercase())
                             {
                                 continue;
                             }
 
                             ui.horizontal(|ui| {
                                 if ui.button("Play").clicked() {
-                                    let file = item
-                                        .path
-                                        .as_ref()
-                                        .map(std::fs::File::open)
-                                        .and_then(|v| v.ok());
-
-                                    if file.is_none() {
-                                        return;
-                                    }
-
-                                    let mut file = file.unwrap();
                                     let mut track = item.to_owned();
 
                                     if let Ok(front_cover) = track.read_front_cover() {
                                         track.front_cover = front_cover;
                                     }
 
-                                    if let Some(current_track) = self.current_track.as_ref()
+                                    if let Some(current_track) = self.player.get_track()
                                         && current_track.front_cover != track.front_cover
                                     {
                                         ctx.forget_image(COVER_IMAGE_URI);
                                     }
 
-                                    if file.seek(std::io::SeekFrom::Start(0)).is_ok() {
-                                        let decoded_audio = rodio::Decoder::try_from(file).unwrap();
-
-                                        // TODO: Implement your own queue and sink so
-                                        // modify source while playing is possible?
-
-                                        self.audio_sink.clear();
-                                        self.audio_sink.append(decoded_audio);
-                                        self.audio_sink.play();
-                                    }
-
-                                    self.current_track = Some(track);
+                                    self.player.add(track);
+                                    self.player.play();
                                 }
 
                                 ui.label(display_text);
@@ -300,16 +274,16 @@ fn read_music_file(
         let tagged = lofty::read_from_path(path)?;
 
         Ok(tagged.primary_tag().map(|tag| Track {
-            front_cover: None,
+            path: path.to_owned(),
+            album: tag.album().map(|v| v.to_string()),
+            title: tag.title().map(|v| v.to_string()),
+            artist: tag.artist().map(|v| v.to_string()),
             disc: tag.disk(),
             disc_total: tag.disk_total(),
             track: tag.track(),
             track_total: tag.track_total(),
-            album: tag.album().map(|v| v.to_string()),
-            artist: tag.artist().map(|v| v.to_string()),
-            title: tag.title().map(|v| v.to_string()),
             total_duration: Some(tagged.properties().duration()),
-            path: Some(path.to_owned()),
+            front_cover: None,
         }))
     } else {
         Ok(None)
