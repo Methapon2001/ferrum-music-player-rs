@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Stroke, include_image};
 
-use crate::common::TrackInfo;
+use crate::track::Track;
 
 #[derive(Clone)]
-pub struct ControllerState {
+struct ControllerState {
     volume: f32,
     duration: f32,
 }
@@ -39,16 +39,13 @@ impl ControllerState {
 /// - `track_info`: An optional [`TrackInfo`](#struct.TrackInfo) struct containing metadata for the currently playing track.
 #[derive(Clone)]
 pub struct Controller<'a> {
-    audio_sink: &'a rodio::Sink,
-    track_info: &'a Option<TrackInfo>,
+    sink: &'a rodio::Sink,
+    track: &'a Option<Track>,
 }
 
 impl<'a> Controller<'a> {
-    pub fn new(audio_sink: &'a rodio::Sink, track_info: &'a Option<TrackInfo>) -> Self {
-        Self {
-            track_info,
-            audio_sink,
-        }
+    pub fn new(sink: &'a rodio::Sink, track: &'a Option<Track>) -> Self {
+        Self { track, sink }
     }
 }
 
@@ -61,8 +58,8 @@ impl egui::Widget for Controller<'_> {
             let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
             let toggle_button = ui.add_enabled(
-                !self.audio_sink.empty(),
-                egui::Button::new(if self.audio_sink.is_paused() || self.audio_sink.empty() {
+                !self.sink.empty(),
+                egui::Button::new(if self.sink.is_paused() || self.sink.empty() {
                     (
                         egui::Image::new(include_image!("../../assets/icons/play.svg")),
                         "Play",
@@ -77,7 +74,7 @@ impl egui::Widget for Controller<'_> {
                 .stroke(Stroke::NONE),
             );
             let stop_button = ui.add_enabled(
-                !self.audio_sink.empty(),
+                !self.sink.empty(),
                 egui::Button::new((
                     egui::Image::new(include_image!("../../assets/icons/stop.svg")),
                     "Stop",
@@ -86,14 +83,18 @@ impl egui::Widget for Controller<'_> {
                 .stroke(Stroke::NONE),
             );
 
-            match (toggle_button.clicked(), self.audio_sink.is_paused()) {
-                (true, true) => self.audio_sink.play(),
-                (true, false) => self.audio_sink.pause(),
+            match (toggle_button.clicked(), self.sink.is_paused()) {
+                (true, true) => {
+                    self.sink.play();
+                }
+                (true, false) => {
+                    self.sink.pause();
+                }
                 _ => {}
             }
 
             if stop_button.clicked() {
-                self.audio_sink.clear();
+                self.sink.clear();
             }
 
             ui.separator();
@@ -108,7 +109,7 @@ impl egui::Widget for Controller<'_> {
                         .step_by(0.02),
                 );
                 if volume_slider.dragged() {
-                    self.audio_sink.set_volume(state.volume);
+                    self.sink.set_volume(state.volume);
                 }
             }
 
@@ -116,16 +117,16 @@ impl egui::Widget for Controller<'_> {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // NOTE: Default to 1.0 so slider handle will be at the start.
-                let total_duration = if let Some(track) = &self.track_info {
+                let total_duration = if let Some(track) = &self.track {
                     track.total_duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
                 } else {
                     1.0
                 };
 
-                state.duration = self.audio_sink.get_pos().as_secs_f32();
+                state.duration = self.sink.get_pos().as_secs_f32();
 
                 // TODO: Handle unknown total duration.
-                if !self.audio_sink.empty() {
+                if !self.sink.empty() {
                     ui.ctx().request_repaint_after(Duration::from_millis(100));
                     ui.label(format!(
                         "{:02}:{:02} / {:02}:{:02}",
@@ -141,20 +142,20 @@ impl egui::Widget for Controller<'_> {
                 {
                     ui.spacing_mut().slider_width = ui.available_width();
                     let duration_slider = ui.add_enabled(
-                        !self.audio_sink.empty(),
+                        !self.sink.empty(),
                         egui::Slider::new(&mut state.duration, 0.0..=total_duration)
                             .handle_shape(slider_handle)
                             .show_value(false)
                             .step_by(0.1),
                     );
                     if duration_slider.dragged() {
-                        self.audio_sink.pause();
-                        self.audio_sink
+                        self.sink.pause();
+                        self.sink
                             .try_seek(Duration::from_secs_f32(state.duration))
                             .unwrap();
                     }
                     if duration_slider.drag_stopped() {
-                        self.audio_sink.play();
+                        self.sink.play();
                     }
                 }
             });

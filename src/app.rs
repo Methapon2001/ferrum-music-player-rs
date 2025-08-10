@@ -1,4 +1,4 @@
-use std::{io::Seek, sync::Arc, thread};
+use std::{io::Seek, sync::Arc};
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
@@ -7,7 +7,7 @@ use lofty::{
     tag::Accessor,
 };
 
-use crate::{common::TrackInfo, ui::controls};
+use crate::{track::Track, ui::controls};
 
 const COVER_IMAGE_URI: &str = "bytes://music_cover";
 
@@ -16,8 +16,8 @@ pub struct App {
     #[allow(dead_code)]
     audio_stream: rodio::OutputStream,
     audio_sink: Arc<rodio::Sink>,
-    current_track: Option<TrackInfo>,
-    track_list: Option<Vec<TrackInfo>>,
+    current_track: Option<Track>,
+    track_list: Option<Vec<Track>>,
     search_text: String,
 }
 
@@ -170,11 +170,11 @@ impl eframe::App for App {
                         for item in list {
                             let display_text = format!(
                                 "{} - {}.{:02} {} / {}",
-                                item.album.to_owned().unwrap_or("-".to_string()),
+                                item.album.as_deref().unwrap_or("-"),
                                 item.disc.to_owned().unwrap_or(1),
                                 item.track.to_owned().unwrap_or(1),
-                                item.title.to_owned().unwrap_or("-".to_string()),
-                                item.artist.to_owned().unwrap_or("-".to_string()),
+                                item.title.as_deref().unwrap_or("-"),
+                                item.artist.as_deref().unwrap_or("-"),
                             );
 
                             if !self.search_text.is_empty()
@@ -247,8 +247,8 @@ impl eframe::App for App {
 /// A `Result` which is:
 /// - `Ok(Vec<TrackInfo>)` containing a list of `TrackInfo` for all music files found.
 /// - `Err(std::io::Error)` if an I/O error occurs during directory traversal.
-fn scan_music_files(path: &std::path::Path) -> std::io::Result<Vec<TrackInfo>> {
-    let mut list: Vec<TrackInfo> = vec![];
+fn scan_music_files(path: &std::path::Path) -> std::io::Result<Vec<Track>> {
+    let mut list: Vec<Track> = vec![];
 
     if path.is_dir() {
         for entry in std::fs::read_dir(path)? {
@@ -294,12 +294,12 @@ fn scan_music_files(path: &std::path::Path) -> std::io::Result<Vec<TrackInfo>> {
 ///   or its tags
 fn read_music_file(
     path: &std::path::Path,
-) -> std::result::Result<Option<TrackInfo>, lofty::error::LoftyError> {
+) -> std::result::Result<Option<Track>, lofty::error::LoftyError> {
     if let Some("flac" | "wav" | "mp3") = path.extension().and_then(|v| v.to_str()) {
         // TODO: Store this in sqlite and only load picture only when select or play track.
         let tagged = lofty::read_from_path(path)?;
 
-        Ok(tagged.primary_tag().map(|tag| TrackInfo {
+        Ok(tagged.primary_tag().map(|tag| Track {
             front_cover: None,
             disc: tag.disk(),
             disc_total: tag.disk_total(),

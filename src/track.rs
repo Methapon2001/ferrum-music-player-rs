@@ -4,7 +4,7 @@ use lofty::file::TaggedFileExt;
 
 #[allow(unused)]
 #[derive(Default, Clone, Debug)]
-pub struct TrackInfo {
+pub struct Track {
     pub album: Option<String>,
     pub disc: Option<u32>,
     pub disc_total: Option<u32>,
@@ -17,7 +17,7 @@ pub struct TrackInfo {
     pub total_duration: Option<Duration>,
 }
 
-impl TrackInfo {
+impl Track {
     pub fn read_front_cover(&self) -> Result<Option<Vec<u8>>, lofty::error::LoftyError> {
         if let Some(path) = self.path.as_ref()
             && let Some("flac" | "wav" | "mp3") = path.extension().and_then(|v| v.to_str())
