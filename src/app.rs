@@ -115,7 +115,7 @@ impl eframe::App for App {
                         .player
                         .get_track()
                         .as_ref()
-                        .and_then(|t| t.front_cover.clone())
+                        .and_then(|t| t.cover.clone())
                     {
                         cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover)
                             .show_loading_spinner(false);
@@ -185,11 +185,11 @@ impl eframe::App for App {
                                     let mut track = item.to_owned();
 
                                     if let Ok(front_cover) = track.read_front_cover() {
-                                        track.front_cover = front_cover;
+                                        track.cover = front_cover;
                                     }
 
                                     if let Some(current_track) = self.player.get_track()
-                                        && current_track.front_cover != track.front_cover
+                                        && current_track.cover != track.cover
                                     {
                                         ctx.forget_image(COVER_IMAGE_URI);
                                     }
@@ -282,8 +282,8 @@ fn read_music_file(
             disc_total: tag.disk_total(),
             track: tag.track(),
             track_total: tag.track_total(),
-            total_duration: Some(tagged.properties().duration()),
-            front_cover: None,
+            duration: Some(tagged.properties().duration()),
+            cover: None,
         }))
     } else {
         Ok(None)

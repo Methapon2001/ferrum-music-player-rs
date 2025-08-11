@@ -117,8 +117,8 @@ impl MediaPlayer {
                 album: track.album.as_deref(),
                 title: track.title.as_deref(),
                 artist: track.artist.as_deref(),
-                duration: track.total_duration,
-                ..Default::default()
+                duration: track.duration,
+                cover_url: None,
             })
             .unwrap();
 

@@ -108,7 +108,7 @@ impl egui::Widget for ControlPanel<'_> {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // NOTE: Default to 1.0 so slider handle will be at the start.
                 let total_duration = if let Some(track) = &self.player.get_track() {
-                    track.total_duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
+                    track.duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
                 } else {
                     1.0
                 };

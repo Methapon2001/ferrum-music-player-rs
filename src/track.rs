@@ -5,16 +5,16 @@ use lofty::file::TaggedFileExt;
 #[allow(unused)]
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Track {
+    pub path: PathBuf,
     pub album: Option<String>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub duration: Option<Duration>,
     pub disc: Option<u32>,
     pub disc_total: Option<u32>,
     pub track: Option<u32>,
     pub track_total: Option<u32>,
-    pub artist: Option<String>,
-    pub title: Option<String>,
-    pub path: PathBuf,
-    pub front_cover: Option<Vec<u8>>,
-    pub total_duration: Option<Duration>,
+    pub cover: Option<Vec<u8>>,
 }
 
 impl Track {
