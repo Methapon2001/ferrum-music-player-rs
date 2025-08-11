@@ -5,12 +5,12 @@ use std::{
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
-use lofty::{
-    file::{AudioFile, TaggedFileExt},
-    tag::Accessor,
-};
 
-use crate::{player::MediaPlayer, track::Track, ui};
+use crate::{
+    player::MediaPlayer,
+    track::{Track, scan_tracks},
+    ui::ControlPanel,
+};
 
 const COVER_IMAGE_URI: &str = "bytes://music_cover";
 
@@ -62,8 +62,8 @@ impl App {
             options.input_options.line_scroll_speed = 100.0;
         });
 
-        let tracks = if let Some(home) = &mut std::env::home_dir() {
-            scan_music_files(&home.join("Music")).ok()
+        let tracks = if let Some(audio_dir) = &dirs::audio_dir() {
+            scan_tracks(audio_dir).ok()
         } else {
             None
         };
@@ -75,7 +75,6 @@ impl App {
             loop {
                 let _ = player_rx.recv();
 
-                // TODO: Handle event(s)?
                 ctx.request_repaint();
             }
         });
@@ -97,7 +96,7 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.add_space(10.0);
 
-                ui.add(ui::media::ControlPanel::new(&mut self.player));
+                ui.add(ControlPanel::new(&mut self.player));
 
                 ui.add_space(10.0);
 
@@ -110,16 +109,15 @@ impl eframe::App for App {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
-                if !self.player.is_empty() {
-                    if let Some(cover) = self
+                if !self.player.is_empty()
+                    && let Some(cover) = self
                         .player
                         .get_track()
                         .as_ref()
-                        .and_then(|t| t.cover.clone())
-                    {
-                        cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover)
-                            .show_loading_spinner(false);
-                    }
+                        .and_then(|v| v.cover.as_deref())
+                {
+                    cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
+                        .show_loading_spinner(false);
                 }
 
                 ui.add_sized([275.0, 275.0], cover_image);
@@ -204,88 +202,5 @@ impl eframe::App for App {
                     }
                 })
         });
-    }
-}
-
-/// Scans the given path for music files and reads their metadata.
-///
-/// This function recursively traverses directories, collecting `TrackInfo` for supported
-/// music file types (`.flac`, `.wav`, `.mp3`).
-///
-/// # Arguments
-///
-/// * `path` - The starting path to scan. This can be a file or a directory.
-///
-/// # Returns
-///
-/// A `Result` which is:
-/// - `Ok(Vec<TrackInfo>)` containing a list of `TrackInfo` for all music files found.
-/// - `Err(std::io::Error)` if an I/O error occurs during directory traversal.
-fn scan_music_files(path: &std::path::Path) -> std::io::Result<Vec<Track>> {
-    let mut list: Vec<Track> = vec![];
-
-    if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            let path = entry?.path();
-
-            if path.is_dir() {
-                list.append(&mut scan_music_files(&path)?);
-            }
-
-            if let Some(track_info) = read_music_file(&path).unwrap_or(None) {
-                list.push(track_info);
-            }
-        }
-    }
-
-    if let Some(track_info) = read_music_file(path).unwrap_or(None) {
-        list.push(track_info);
-    }
-
-    // TODO: Handle error and display error.
-
-    Ok(list)
-}
-
-/// Reads metadata from a single music file.
-///
-/// This function attempts to read metadata from files with `.flac`, `.wav`, or `.mp3`
-/// extensions using the `lofty` crate. It returns a `Result` to indicate whether the
-/// operation was successful and an `Option<TrackInfo>` to represent if a primary tag
-/// was found within the file.
-///
-/// # Arguments
-///
-/// * `path` - The path to the music file.
-///
-/// # Returns
-///
-/// A `Result<Option<TrackInfo>, lofty::error::LoftyError>`:
-/// - `Ok(Some(TrackInfo))` if the file is a supported music format and a primary tag
-///   with metadata was successfully read.
-/// - `Ok(None)` if the file is not a supported music format (based on its extension).
-/// - `Err(lofty::error::LoftyError)` if an error occurred while reading the music file
-///   or its tags
-fn read_music_file(
-    path: &std::path::Path,
-) -> std::result::Result<Option<Track>, lofty::error::LoftyError> {
-    if let Some("flac" | "wav" | "mp3") = path.extension().and_then(|v| v.to_str()) {
-        // TODO: Store this in sqlite and only load picture only when select or play track.
-        let tagged = lofty::read_from_path(path)?;
-
-        Ok(tagged.primary_tag().map(|tag| Track {
-            path: path.to_owned(),
-            album: tag.album().map(|v| v.to_string()),
-            title: tag.title().map(|v| v.to_string()),
-            artist: tag.artist().map(|v| v.to_string()),
-            disc: tag.disk(),
-            disc_total: tag.disk_total(),
-            track: tag.track(),
-            track_total: tag.track_total(),
-            duration: Some(tagged.properties().duration()),
-            cover: None,
-        }))
-    } else {
-        Ok(None)
     }
 }
