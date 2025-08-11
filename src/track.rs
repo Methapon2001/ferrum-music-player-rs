@@ -23,7 +23,8 @@ impl Track {
         if let Some("flac" | "wav" | "mp3") = path.extension().and_then(|v| v.to_str()) {
             Ok(lofty::read_from_path(path)?.primary_tag().and_then(|tag| {
                 tag.get_picture_type(lofty::picture::PictureType::CoverFront)
-                    .map(|v| v.data().to_owned())
+                    .or_else(|| tag.pictures().first())
+                    .map(|pic| pic.data().to_owned())
             }))
         } else {
             Ok(None)
