@@ -35,21 +35,10 @@ impl MediaPlayer {
         let stream = rodio::OutputStreamBuilder::open_default_stream().unwrap();
         let sink = rodio::Sink::connect_new(stream.mixer());
 
-        #[cfg(not(target_os = "windows"))]
-        let hwnd = None;
-
-        #[cfg(target_os = "windows")]
-        let hwnd = {
-            use raw_window_handle::windows::WindowsHandle;
-
-            let handle: WindowsHandle = unimplemented!();
-            Some(handle.hwnd)
-        };
-
         let mut controls = MediaControls::new(PlatformConfig {
             dbus_name: "music_player_rs",
             display_name: "Music Player Rust",
-            hwnd,
+            hwnd: None,
         })
         .unwrap();
 

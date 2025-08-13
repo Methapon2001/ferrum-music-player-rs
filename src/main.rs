@@ -1,4 +1,6 @@
 mod app;
+mod config;
+mod database;
 mod player;
 mod track;
 mod ui;

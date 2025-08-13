@@ -1,22 +1,25 @@
 use std::{
+    path::Path,
     sync::{Arc, mpsc},
     thread,
 };
 
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily, mutex::Mutex};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 
 use crate::{
+    config::get_default_audio_dir_config,
+    database::{Database, get_all_tracks, upsert_track},
     player::MediaPlayer,
-    track::{Track, scan_tracks},
+    track::{Track, read_track_metadata, scan_tracks},
     ui::ControlPanel,
 };
 
 const COVER_IMAGE_URI: &str = "bytes://music_cover";
 
 pub struct App {
-    player: MediaPlayer,
-    tracks: Option<Vec<Track>>,
+    player: Arc<Mutex<MediaPlayer>>,
+    tracks: Arc<Mutex<Vec<Track>>>,
     search: String,
 }
 
@@ -62,25 +65,56 @@ impl App {
             options.input_options.line_scroll_speed = 100.0;
         });
 
-        let tracks = if let Some(audio_dir) = &dirs::audio_dir() {
-            scan_tracks(audio_dir).ok()
-        } else {
-            None
-        };
-
-        let ctx = cc.egui_ctx.clone();
         let (player_tx, player_rx) = mpsc::sync_channel(0);
+        let player = Arc::new(Mutex::new(MediaPlayer::new(player_tx)));
+
+        let tracks = Arc::new(Mutex::new(Vec::new()));
+
+        let tracks_thread = tracks.clone();
+        let player_thread = player.clone();
+        let ctx = cc.egui_ctx.clone();
 
         thread::spawn(move || {
+            let database = Database::new().expect("Database connected.");
+            let track_entries = get_default_audio_dir_config()
+                .as_deref()
+                .map(scan_tracks)
+                .unwrap_or_default();
+            let mut track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
+
+            if track_records.is_empty() {
+                track_records = track_entries
+                    .iter()
+                    .map(|v| read_track_metadata(v).expect("Music metadata."))
+                    .collect();
+
+                {
+                    if let Ok(tx) = database.get_connection().transaction() {
+                        track_records.iter().for_each(|item| {
+                            if let Err(err) = upsert_track(&tx, item) {
+                                dbg!("Failed to update database:", err);
+                            };
+                        });
+                        tx.commit().ok();
+                    }
+                }
+                // NOTE: Get all tracks sorted from database.
+                track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
+            }
+
+            *tracks_thread.lock() = track_records;
+
+            ctx.request_repaint();
+
             loop {
                 let _ = player_rx.recv();
 
-                ctx.request_repaint();
+                player_thread.lock().mpris_handler();
             }
         });
 
         Self {
-            player: MediaPlayer::new(player_tx),
+            player,
             search: String::new(),
             tracks,
         }
@@ -89,14 +123,17 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.player.mpris_handler();
+        let mut player = self.player.lock();
+
+        #[cfg(not(target_os = "windows"))]
+        player.mpris_update_progress();
 
         egui::TopBottomPanel::bottom("controls")
             .show_separator_line(true)
             .show(ctx, |ui| {
                 ui.add_space(10.0);
 
-                ui.add(ControlPanel::new(&mut self.player));
+                ui.add(ControlPanel::new(&mut player));
 
                 ui.add_space(10.0);
 
@@ -109,12 +146,9 @@ impl eframe::App for App {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
-                if !self.player.is_empty()
-                    && let Some(cover) = self
-                        .player
-                        .get_track()
-                        .as_ref()
-                        .and_then(|v| v.cover.as_deref())
+                if !player.is_empty()
+                    && let Some(cover) =
+                        player.get_track().as_ref().and_then(|v| v.cover.as_deref())
                 {
                     cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
                         .show_loading_spinner(false);
@@ -122,8 +156,8 @@ impl eframe::App for App {
 
                 ui.add_sized([275.0, 275.0], cover_image);
 
-                if let Some(current_track) = self.player.get_track()
-                    && !self.player.is_empty()
+                if let Some(current_track) = player.get_track()
+                    && !player.is_empty()
                 {
                     ui.vertical_centered(|ui| {
                         match (
@@ -159,46 +193,44 @@ impl eframe::App for App {
 
                     ui.add_space(10.0);
 
-                    if let Some(list) = &self.tracks {
-                        for item in list {
-                            let display_text = format!(
-                                "{} - {}.{:02} {} / {}",
-                                item.album.as_deref().unwrap_or("-"),
-                                item.disc.to_owned().unwrap_or(1),
-                                item.track.to_owned().unwrap_or(1),
-                                item.title.as_deref().unwrap_or("-"),
-                                item.artist.as_deref().unwrap_or("-"),
-                            );
+                    for item in self.tracks.lock().iter() {
+                        let display_text = format!(
+                            "{} - {}.{:02} {} / {}",
+                            item.album.as_deref().unwrap_or("-"),
+                            item.disc.as_deref().unwrap_or("-"),
+                            item.track.as_deref().unwrap_or("-"),
+                            item.title.as_deref().unwrap_or("-"),
+                            item.artist.as_deref().unwrap_or("-"),
+                        );
 
-                            if !self.search.is_empty()
-                                && !display_text
-                                    .to_lowercase()
-                                    .contains(&self.search.to_lowercase())
-                            {
-                                continue;
-                            }
+                        if !self.search.is_empty()
+                            && !display_text
+                                .to_lowercase()
+                                .contains(&self.search.to_lowercase())
+                        {
+                            continue;
+                        }
 
-                            ui.horizontal(|ui| {
-                                if ui.button("Play").clicked() {
-                                    let mut track = item.to_owned();
+                        ui.horizontal(|ui| {
+                            if ui.button("Play").clicked() {
+                                let mut track = item.to_owned();
 
-                                    if let Ok(front_cover) = track.read_front_cover() {
-                                        track.cover = front_cover;
-                                    }
-
-                                    if let Some(current_track) = self.player.get_track()
-                                        && current_track.cover != track.cover
-                                    {
-                                        ctx.forget_image(COVER_IMAGE_URI);
-                                    }
-
-                                    self.player.add(track);
-                                    self.player.play();
+                                if let Ok(front_cover) = track.read_front_cover() {
+                                    track.cover = front_cover;
                                 }
 
-                                ui.label(display_text);
-                            });
-                        }
+                                if let Some(current_track) = player.get_track()
+                                    && current_track.cover != track.cover
+                                {
+                                    ctx.forget_image(COVER_IMAGE_URI);
+                                }
+
+                                player.add(track);
+                                player.play();
+                            }
+
+                            ui.label(display_text);
+                        });
                     }
                 })
         });
