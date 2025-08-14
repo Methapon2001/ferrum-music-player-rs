@@ -46,8 +46,8 @@ impl Track {
 
 /// Scans the given path for music files.
 ///
-/// This function recursively traverses directories, collecting `TrackInfo` for supported
-/// music file types (`.flac`, `.wav`, `.mp3`).
+/// This function recursively traverses directories, collecting `Track` for supported
+/// music file types (Currently plan to support `.flac`, `.wav`, `.mp3`).
 ///
 /// # Arguments
 ///
