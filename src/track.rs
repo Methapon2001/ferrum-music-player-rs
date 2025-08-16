@@ -51,15 +51,14 @@ impl AsRef<Track> for Track {
     }
 }
 
-impl<'a> Into<MediaMetadata<'a>> for &'a Track {
-    fn into(self) -> MediaMetadata<'a> {
+impl<'a> From<&'a Track> for MediaMetadata<'a> {
+    fn from(val: &'a Track) -> Self {
         MediaMetadata {
-            album: self.album.as_deref(),
-            title: self.title.as_deref(),
-            artist: self.artist.as_deref(),
-            duration: self.duration,
+            album: val.album.as_deref(),
+            title: val.title.as_deref(),
+            artist: val.artist.as_deref(),
+            duration: val.duration,
             cover_url: None,
-            ..Default::default()
         }
     }
 }
