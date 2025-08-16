@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub const COVER_IMAGE_URI: &str = "bytes://music_cover";
+
 pub fn get_default_app_dir_config() -> PathBuf {
     let mut config_dir = dirs::config_dir().expect("Os config directory.");
 

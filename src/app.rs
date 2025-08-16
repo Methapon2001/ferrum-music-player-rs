@@ -7,19 +7,16 @@ use eframe::egui::{self, FontData, FontDefinitions, FontFamily, mutex::Mutex};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 
 use crate::{
-    config::get_default_audio_dir_config,
+    config::{COVER_IMAGE_URI, get_default_audio_dir_config},
     database::{Database, get_all_tracks, upsert_track},
     player::{MediaPlayer, MediaPlayerEvent},
     track::{Track, read_track_metadata, scan_tracks},
-    ui::ControlPanel,
+    ui::{control_panel::ControlPanel, track_list::TrackList},
 };
-
-const COVER_IMAGE_URI: &str = "bytes://music_cover";
 
 pub struct App {
     player: Arc<Mutex<MediaPlayer>>,
     tracks: Arc<Mutex<Vec<Track>>>,
-    search: String,
 }
 
 impl App {
@@ -122,11 +119,7 @@ impl App {
             }
         });
 
-        Self {
-            player,
-            search: String::new(),
-            tracks,
-        }
+        Self { player, tracks }
     }
 }
 
@@ -188,59 +181,7 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .scroll_source(egui::scroll_area::ScrollSource::ALL)
-                .show(ui, |ui| {
-                    ui.add_sized(
-                        [ui.available_width(), 30.0],
-                        egui::TextEdit::singleline(&mut self.search)
-                            .vertical_align(egui::Align::Center)
-                            .hint_text("Search"),
-                    );
-
-                    ui.add_space(10.0);
-
-                    for item in self.tracks.lock().iter() {
-                        let display_text = format!(
-                            "{} - {}.{:02} {} / {}",
-                            item.album.as_deref().unwrap_or("-"),
-                            item.disc.as_deref().unwrap_or("-"),
-                            item.track.as_deref().unwrap_or("-"),
-                            item.title.as_deref().unwrap_or("-"),
-                            item.artist.as_deref().unwrap_or("-"),
-                        );
-
-                        if !self.search.is_empty()
-                            && !display_text
-                                .to_lowercase()
-                                .contains(&self.search.to_lowercase())
-                        {
-                            continue;
-                        }
-
-                        ui.horizontal(|ui| {
-                            if ui.button("Play").clicked() {
-                                let mut track = item.to_owned();
-
-                                if let Ok(front_cover) = track.read_front_cover() {
-                                    track.cover = front_cover;
-                                }
-
-                                if let Some(current_track) = player.get_track()
-                                    && current_track.cover != track.cover
-                                {
-                                    ctx.forget_image(COVER_IMAGE_URI);
-                                }
-
-                                player.add(track);
-                                player.play();
-                            }
-
-                            ui.label(display_text);
-                        });
-                    }
-                })
+            ui.add(TrackList::new(&mut player, self.tracks.lock().as_slice()));
         });
     }
 }
