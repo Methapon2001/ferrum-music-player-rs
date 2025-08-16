@@ -24,7 +24,8 @@ pub struct MediaPlayer {
 
 impl MediaPlayer {
     pub fn new(player_tx: SyncSender<MediaPlayerEvent>) -> Self {
-        let stream = rodio::OutputStreamBuilder::open_default_stream().unwrap();
+        let stream =
+            rodio::OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
         let sink = rodio::Sink::connect_new(stream.mixer());
 
         Self {
