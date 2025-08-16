@@ -99,6 +99,9 @@ impl App {
                 }
                 // NOTE: Get all tracks sorted from database.
                 track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
+            } else {
+                // TODO: Insert new tracks or update modified track by compare last modified time
+                // from file and record in database.
             }
 
             *tracks_thread.lock() = track_records;
