@@ -89,7 +89,7 @@ impl egui::Widget for ControlPanel<'_> {
 
             ui.separator();
 
-            {
+            ui.scope(|ui| {
                 ui.spacing_mut().slider_width = 75.0;
                 // TODO: Custom?
                 let volume_slider = ui.add(
@@ -101,7 +101,7 @@ impl egui::Widget for ControlPanel<'_> {
                 if volume_slider.dragged() {
                     self.player.set_volume(state.volume);
                 }
-            }
+            });
 
             ui.separator();
 

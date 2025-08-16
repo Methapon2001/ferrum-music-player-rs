@@ -66,58 +66,61 @@ impl App {
 
         let tracks = Arc::new(Mutex::new(Vec::new()));
 
-        let tracks_thread = tracks.clone();
-        let player_thread = player.clone();
-        let ctx = cc.egui_ctx.clone();
+        {
+            let tracks = tracks.clone();
+            let player = player.clone();
+            let ctx = cc.egui_ctx.clone();
 
-        thread::spawn(move || {
-            let database = Database::new().expect("Database connected.");
-            let track_entries = get_default_audio_dir_config()
-                .as_deref()
-                .map(scan_tracks)
-                .unwrap_or_default();
-            let mut track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
+            thread::spawn(move || {
+                let database = Database::new().expect("Database connected.");
+                let track_entries = get_default_audio_dir_config()
+                    .as_deref()
+                    .map(scan_tracks)
+                    .unwrap_or_default();
+                let mut track_records =
+                    get_all_tracks(&database.get_connection()).unwrap_or_default();
 
-            if track_records.is_empty() {
-                track_records = track_entries
-                    .iter()
-                    .map(|v| read_track_metadata(v).expect("Music metadata."))
-                    .collect();
+                if track_records.is_empty() {
+                    track_records = track_entries
+                        .iter()
+                        .map(|v| read_track_metadata(v).expect("Music metadata."))
+                        .collect();
 
-                {
-                    if let Ok(tx) = database.get_connection().transaction() {
-                        track_records.iter().for_each(|item| {
-                            if let Err(err) = upsert_track(&tx, item) {
-                                dbg!("Failed to update database:", err);
-                            };
-                        });
-                        tx.commit().ok();
+                    {
+                        if let Ok(tx) = database.get_connection().transaction() {
+                            track_records.iter().for_each(|item| {
+                                if let Err(err) = upsert_track(&tx, item) {
+                                    dbg!("Failed to update database:", err);
+                                };
+                            });
+                            tx.commit().ok();
+                        }
                     }
+                    // NOTE: Get all tracks sorted from database.
+                    track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
+                } else {
+                    // TODO: Insert new tracks or update modified track by compare last modified time
+                    // from file and record in database.
                 }
-                // NOTE: Get all tracks sorted from database.
-                track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
-            } else {
-                // TODO: Insert new tracks or update modified track by compare last modified time
-                // from file and record in database.
-            }
 
-            *tracks_thread.lock() = track_records;
+                *tracks.lock() = track_records;
 
-            ctx.request_repaint();
+                ctx.request_repaint();
 
-            loop {
-                if let Ok(player_event) = player_rx.recv() {
-                    match player_event {
-                        MediaPlayerEvent::Tick => {
-                            let mut player = player_thread.lock();
-                            if let Some(mpris_event) = player.mpris.try_recv_event() {
-                                player.mpris_handle(mpris_event);
+                loop {
+                    if let Ok(player_event) = player_rx.recv() {
+                        match player_event {
+                            MediaPlayerEvent::Tick => {
+                                let mut player = player.lock();
+                                if let Some(mpris_event) = player.mpris.try_recv_event() {
+                                    player.mpris_handle(mpris_event);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         Self { player, tracks }
     }
