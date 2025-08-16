@@ -1,5 +1,4 @@
 use std::{
-    path::Path,
     sync::{Arc, mpsc},
     thread,
 };
@@ -10,7 +9,7 @@ use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 use crate::{
     config::get_default_audio_dir_config,
     database::{Database, get_all_tracks, upsert_track},
-    player::MediaPlayer,
+    player::{MediaPlayer, MediaPlayerEvent},
     track::{Track, read_track_metadata, scan_tracks},
     ui::ControlPanel,
 };
@@ -107,9 +106,16 @@ impl App {
             ctx.request_repaint();
 
             loop {
-                let _ = player_rx.recv();
-
-                player_thread.lock().mpris_handler();
+                if let Ok(player_event) = player_rx.recv() {
+                    match player_event {
+                        MediaPlayerEvent::Tick => {
+                            let mut player = player_thread.lock();
+                            if let Some(mpris_event) = player.mpris.try_recv_event() {
+                                player.mpris_handle(mpris_event);
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -125,7 +131,6 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut player = self.player.lock();
 
-        #[cfg(not(target_os = "windows"))]
         player.mpris_update_progress();
 
         egui::TopBottomPanel::bottom("controls")

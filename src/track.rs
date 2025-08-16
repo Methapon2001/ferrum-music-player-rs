@@ -13,6 +13,7 @@ use lofty::{
     probe::Probe,
     tag::ItemKey,
 };
+use souvlaki::MediaMetadata;
 use walkdir::WalkDir;
 
 #[allow(unused)]
@@ -41,6 +42,25 @@ impl Track {
                 .or_else(|| tag.pictures().first())
                 .map(|pic| pic.data().to_owned())
         }))
+    }
+}
+
+impl AsRef<Track> for Track {
+    fn as_ref(&self) -> &Track {
+        self
+    }
+}
+
+impl<'a> Into<MediaMetadata<'a>> for &'a Track {
+    fn into(self) -> MediaMetadata<'a> {
+        MediaMetadata {
+            album: self.album.as_deref(),
+            title: self.title.as_deref(),
+            artist: self.artist.as_deref(),
+            duration: self.duration,
+            cover_url: None,
+            ..Default::default()
+        }
     }
 }
 
