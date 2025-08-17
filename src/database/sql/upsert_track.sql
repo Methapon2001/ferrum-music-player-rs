@@ -1,6 +1,7 @@
-INSERT INTO tracks(path, title, artist, genre, album, album_artist, track, track_total, disc, disc_total, duration)
-VALUES (:path, :title, :artist, :genre, :album, :album_artist, :track, :track_total, :disc, :disc_total, :duration)
+INSERT INTO tracks(path, modified, title, artist, genre, album, album_artist, track, track_total, disc, disc_total, duration)
+VALUES (:path, :modified, :title, :artist, :genre, :album, :album_artist, :track, :track_total, :disc, :disc_total, :duration)
 ON CONFLICT(path) DO UPDATE SET
+  modified = excluded.modified,
   title = excluded.title,
   artist = excluded.artist,
   genre = excluded.genre,

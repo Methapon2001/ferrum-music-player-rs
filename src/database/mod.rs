@@ -38,6 +38,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> 
     stmt.query_map(named_params! {}, |row| {
         Ok(Track {
             path: row.get("path").map(|v: String| PathBuf::from(v))?,
+            modified: row.get("modified").ok(),
             title: row.get("title").ok(),
             artist: row.get("artist").ok(),
             genre: row.get("genre").ok(),
@@ -63,6 +64,7 @@ pub fn upsert_track(conn: &Connection, track: &Track) -> Result<i32, rusqlite::E
     stmt.query_row(
         named_params! {
             ":path": track.path.to_string_lossy(),
+            ":modified": track.modified,
             ":title": track.title,
             ":artist": track.artist,
             ":genre": track.genre,

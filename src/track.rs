@@ -2,9 +2,10 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
     result::Result,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
+use chrono::{DateTime, Local};
 use lofty::{
     config::ParseOptions,
     error::LoftyError,
@@ -20,6 +21,7 @@ use walkdir::WalkDir;
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Track {
     pub path: PathBuf,
+    pub modified: Option<String>,
     pub title: Option<String>,
     pub artist: Option<String>,
     pub genre: Option<String>,
@@ -120,6 +122,14 @@ pub fn read_track_metadata(path: &Path) -> Result<Track, LoftyError> {
         },
         |tag| Track {
             path: path.to_owned(),
+            modified: Some(
+                DateTime::<Local>::from(
+                    path.metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(SystemTime::now()),
+                )
+                .to_rfc3339(),
+            ),
             title: tag.get_string(&ItemKey::TrackTitle).map(String::from),
             artist: tag.get_string(&ItemKey::TrackArtist).map(String::from),
             genre: tag.get_string(&ItemKey::Genre).map(String::from),
