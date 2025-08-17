@@ -1,4 +1,4 @@
-use eframe::egui;
+use eframe::egui::{self, include_image};
 
 use crate::{config::COVER_IMAGE_URI, player::MediaPlayer, track::Track};
 
@@ -52,6 +52,7 @@ impl egui::Widget for TrackList<'_> {
                 .striped(true)
                 .resizable(true)
                 .auto_shrink(false)
+                .column(Column::initial(width * 0.1).at_least(30.0).clip(true))
                 .column(
                     Column::initial(width * 0.3)
                         .at_least(width * 0.2)
@@ -67,6 +68,11 @@ impl egui::Widget for TrackList<'_> {
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .header(32.0, |mut header| {
                     header.col(|ui| {
+                        ui.centered_and_justified(|ui| {
+                            ui.strong("Playing");
+                        });
+                    });
+                    header.col(|ui| {
                         ui.strong("Album");
                     });
                     header.col(|ui| {
@@ -81,10 +87,16 @@ impl egui::Widget for TrackList<'_> {
                         ui.strong("Artist");
                     });
                 })
-                .body(|mut ui| {
-                    for item in self.tracks.iter() {
-                        if !state.search.is_empty()
-                            && !format!(
+                .body(|ui| {
+                    let tracks = self
+                        .tracks
+                        .iter()
+                        .filter(|item| {
+                            if state.search.is_empty() {
+                                return true;
+                            }
+
+                            format!(
                                 "{} {} {}",
                                 item.album.as_deref().unwrap_or(""),
                                 item.title.as_deref().unwrap_or(""),
@@ -93,51 +105,62 @@ impl egui::Widget for TrackList<'_> {
                             .to_lowercase()
                             .trim()
                             .contains(&state.search.to_lowercase())
-                        {
-                            continue;
-                        }
+                        })
+                        .collect::<Vec<&Track>>();
 
-                        ui.row(24.0, |mut row| {
-                            row.col(|ui| {
-                                ui.label(item.album.as_deref().unwrap_or("-"));
-                            });
-                            row.col(|ui| {
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.label(format!(
-                                            "{}.{:0>2}",
-                                            item.disc.as_deref().unwrap_or_default(),
-                                            item.track.as_deref().unwrap_or_default()
-                                        ));
-                                    },
-                                );
-                            });
-                            row.col(|ui| {
-                                ui.label(item.title.as_deref().unwrap_or("-"));
-                            });
-                            row.col(|ui| {
-                                ui.label(item.artist.as_deref().unwrap_or("-"));
-                            });
+                    ui.rows(24.0, tracks.len(), |mut row| {
+                        let item = tracks[row.index()];
 
-                            if row.response().clicked() {
-                                let mut track = item.to_owned();
-
-                                if let Ok(front_cover) = track.read_front_cover() {
-                                    track.cover = front_cover;
+                        row.col(|ui| {
+                            ui.centered_and_justified(|ui| {
+                                if self.player.is_playing_track(item) {
+                                    ui.image(if self.player.is_paused() {
+                                        include_image!("../../assets/icons/pause.svg")
+                                    } else {
+                                        include_image!("../../assets/icons/play.svg")
+                                    });
                                 }
-
-                                if let Some(current_track) = self.player.get_track()
-                                    && current_track.cover != track.cover
-                                {
-                                    ctx.forget_image(COVER_IMAGE_URI);
-                                }
-
-                                self.player.add(track);
-                                self.player.play();
-                            }
+                            });
                         });
-                    }
+                        row.col(|ui| {
+                            ui.label(item.album.as_deref().unwrap_or("-"));
+                        });
+                        row.col(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(format!(
+                                        "{}.{:0>2}",
+                                        item.disc.as_deref().unwrap_or_default(),
+                                        item.track.as_deref().unwrap_or_default()
+                                    ));
+                                },
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.label(item.title.as_deref().unwrap_or("-"));
+                        });
+                        row.col(|ui| {
+                            ui.label(item.artist.as_deref().unwrap_or("-"));
+                        });
+
+                        if row.response().clicked() {
+                            let mut track = item.to_owned();
+
+                            if let Ok(front_cover) = track.read_front_cover() {
+                                track.cover = front_cover;
+                            }
+
+                            if let Some(current_track) = self.player.get_track()
+                                && current_track.cover != track.cover
+                            {
+                                ctx.forget_image(COVER_IMAGE_URI);
+                            }
+
+                            self.player.add(track);
+                            self.player.play();
+                        }
+                    });
                 });
 
             state.store(&ctx, id);

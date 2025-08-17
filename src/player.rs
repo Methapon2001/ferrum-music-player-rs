@@ -115,4 +115,14 @@ impl MediaPlayer {
     pub fn get_track(&self) -> Option<&Track> {
         self.track.as_ref()
     }
+
+    pub fn is_playing_track(&self, track: &Track) -> bool {
+        if let Some(current_track) = self.get_track()
+            && current_track.path == track.path
+        {
+            current_track.path == track.path
+        } else {
+            false
+        }
+    }
 }
