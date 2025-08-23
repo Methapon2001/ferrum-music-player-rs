@@ -1,22 +1,16 @@
 use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    path::PathBuf,
-    str::FromStr,
     sync::{Arc, mpsc},
     thread,
-    time::SystemTime,
 };
 
-use chrono::DateTime;
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily, mutex::Mutex};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 
 use crate::{
-    config::{COVER_IMAGE_URI, get_default_audio_dir_config},
-    database::{Database, get_all_tracks, upsert_track},
+    config::COVER_IMAGE_URI,
+    database::{Database, get_all_tracks, update_music_database},
     player::{MediaPlayer, MediaPlayerEvent},
-    track::{Track, read_track_metadata, scan_tracks},
+    track::Track,
     ui::{control_panel::ControlPanel, track_list::TrackList},
 };
 
@@ -78,52 +72,11 @@ impl App {
             let ctx = cc.egui_ctx.clone();
 
             thread::spawn(move || {
-                {
-                    let database = Database::new().expect("Database connected.");
+                let database = Database::new().expect("Database connected.");
 
-                    let track_records: HashMap<PathBuf, Track> =
-                        get_all_tracks(&database.get_connection())
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|item| (item.path.to_owned(), item))
-                            .collect();
-                    let mut track_entries = get_default_audio_dir_config()
-                        .as_deref()
-                        .map(scan_tracks)
-                        .unwrap_or_default();
+                update_music_database(&mut database.get_connection(), false).ok();
 
-                    track_entries.retain(|entry| {
-                        track_records.get(entry).is_none_or(|v| {
-                            v.modified.as_deref().is_none_or(|modified| {
-                                let record_modified_dt =
-                                    DateTime::<chrono::Local>::from_str(modified).unwrap();
-                                let source_modified_dt = DateTime::<chrono::Local>::from(
-                                    entry
-                                        .metadata()
-                                        .and_then(|metadata| metadata.modified())
-                                        .unwrap_or(SystemTime::now()),
-                                );
-
-                                source_modified_dt.cmp(&record_modified_dt) == Ordering::Greater
-                            })
-                        })
-                    });
-
-                    if let Ok(tx) = database.get_connection().transaction() {
-                        track_entries.iter().for_each(|entry| {
-                            if let Err(err) = upsert_track(
-                                &tx,
-                                &read_track_metadata(entry).expect("Music metadata."),
-                            ) {
-                                dbg!("Failed to update database:", err);
-                            };
-                        });
-
-                        tx.commit().ok();
-                    }
-
-                    *tracks.lock() = get_all_tracks(&database.get_connection()).unwrap_or_default();
-                }
+                *tracks.lock() = get_all_tracks(&database.get_connection()).unwrap_or_default();
 
                 ctx.request_repaint();
 
