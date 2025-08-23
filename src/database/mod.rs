@@ -41,58 +41,61 @@ impl Database {
     pub fn get_connection(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock()
     }
-}
 
-/// This function updates a music library database based on local audio files.
-/// It either performs a full scan of all files or a partial, incremental update that only processes new or modified files.
-///
-/// # Arguments
-///
-/// * `conn` - A mutable reference to a `rusqlite::Connection` object.
-/// * `full` - A boolean flag. If true, the function will perform a full refresh, scanning all audio files in the configured directory.
-///   If false, it will perform an incremental refresh, only processing files that are new or have been modified since their last entry in the database.
-pub fn update_music_database(conn: &mut Connection, full: bool) -> Result<(), rusqlite::Error> {
-    let track_records: HashMap<PathBuf, Track> = get_all_tracks(conn)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|item| (item.path.to_owned(), item))
-        .collect();
-    let mut track_entries = get_default_audio_dir_config()
-        .as_deref()
-        .map(scan_tracks)
-        .unwrap_or_default();
+    /// This function updates a music library database based on local audio files.
+    /// It either performs a full scan of all files or a partial, incremental update that only processes new or modified files.
+    ///
+    /// # Arguments
+    ///
+    /// * `full` - A boolean flag.
+    ///   - If true, the function will perform a full refresh, scanning all audio files in the configured directory.
+    ///   - If false, it will perform an incremental refresh, only processing files that are new or have been modified since their last entry in the database.
+    pub fn refresh_library(&self, full: bool) -> Result<(), rusqlite::Error> {
+        let mut conn = self.get_connection();
 
-    if !full {
-        track_entries.retain(|entry| {
-            track_records.get(entry).is_none_or(|v| {
-                v.modified.as_deref().is_none_or(|modified| {
-                    let record_modified_dt = DateTime::<chrono::Local>::from_str(modified).unwrap();
-                    let source_modified_dt = DateTime::<chrono::Local>::from(
-                        entry
-                            .metadata()
-                            .and_then(|metadata| metadata.modified())
-                            .unwrap_or(SystemTime::now()),
-                    );
+        let track_records: HashMap<PathBuf, Track> = get_all_tracks(&conn)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| (item.path.to_owned(), item))
+            .collect();
+        let mut track_entries = get_default_audio_dir_config()
+            .as_deref()
+            .map(scan_tracks)
+            .unwrap_or_default();
 
-                    source_modified_dt.cmp(&record_modified_dt) == Ordering::Greater
+        if !full {
+            track_entries.retain(|entry| {
+                track_records.get(entry).is_none_or(|v| {
+                    v.modified.as_deref().is_none_or(|modified| {
+                        let record_modified_dt =
+                            DateTime::<chrono::Local>::from_str(modified).unwrap();
+                        let source_modified_dt = DateTime::<chrono::Local>::from(
+                            entry
+                                .metadata()
+                                .and_then(|metadata| metadata.modified())
+                                .unwrap_or(SystemTime::now()),
+                        );
+
+                        source_modified_dt.cmp(&record_modified_dt) == Ordering::Greater
+                    })
                 })
-            })
-        });
+            });
+        }
+
+        if let Ok(tx) = conn.transaction() {
+            track_entries.iter().for_each(|entry| {
+                if let Err(err) =
+                    upsert_track(&tx, &read_track_metadata(entry).expect("Music metadata."))
+                {
+                    dbg!("Failed to update database:", err);
+                };
+            });
+
+            tx.commit()?;
+        }
+
+        Ok(())
     }
-
-    if let Ok(tx) = conn.transaction() {
-        track_entries.iter().for_each(|entry| {
-            if let Err(err) =
-                upsert_track(&tx, &read_track_metadata(entry).expect("Music metadata."))
-            {
-                dbg!("Failed to update database:", err);
-            };
-        });
-
-        tx.commit()?;
-    }
-
-    Ok(())
 }
 
 pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> {

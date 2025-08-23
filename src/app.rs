@@ -8,7 +8,7 @@ use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 
 use crate::{
     config::COVER_IMAGE_URI,
-    database::{Database, get_all_tracks, update_music_database},
+    database::{Database, get_all_tracks},
     player::{MediaPlayer, MediaPlayerEvent},
     track::Track,
     ui::{control_panel::ControlPanel, track_list::TrackList},
@@ -74,7 +74,7 @@ impl App {
             thread::spawn(move || {
                 let database = Database::new().expect("Database connected.");
 
-                update_music_database(&mut database.get_connection(), false).ok();
+                database.refresh_library(false).ok();
 
                 *tracks.lock() = get_all_tracks(&database.get_connection()).unwrap_or_default();
 
