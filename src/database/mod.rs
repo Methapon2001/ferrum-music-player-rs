@@ -1,9 +1,20 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
+use chrono::DateTime;
 use eframe::egui::mutex::{Mutex, MutexGuard};
 use rusqlite::{Connection, named_params};
 
-use crate::{config::get_default_app_dir_config, track::Track};
+use crate::{
+    config::{get_default_app_dir_config, get_default_audio_dir_config},
+    track::{Track, read_track_metadata, scan_tracks},
+};
 
 #[derive(Clone)]
 pub struct Database {
@@ -30,6 +41,61 @@ impl Database {
     pub fn get_connection(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock()
     }
+
+    /// This function updates a music library database based on local audio files.
+    /// It either performs a full scan of all files or a partial, incremental update that only processes new or modified files.
+    ///
+    /// # Arguments
+    ///
+    /// * `full` - A boolean flag.
+    ///   - If true, the function will perform a full refresh, scanning all audio files in the configured directory.
+    ///   - If false, it will perform an incremental refresh, only processing files that are new or have been modified since their last entry in the database.
+    pub fn refresh_library(&self, full: bool) -> Result<(), rusqlite::Error> {
+        let mut conn = self.get_connection();
+
+        let track_records: HashMap<PathBuf, Track> = get_all_tracks(&conn)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| (item.path.to_owned(), item))
+            .collect();
+        let mut track_entries = get_default_audio_dir_config()
+            .as_deref()
+            .map(scan_tracks)
+            .unwrap_or_default();
+
+        if !full {
+            track_entries.retain(|entry| {
+                track_records.get(entry).is_none_or(|v| {
+                    v.modified.as_deref().is_none_or(|modified| {
+                        let record_modified_dt =
+                            DateTime::<chrono::Local>::from_str(modified).unwrap();
+                        let source_modified_dt = DateTime::<chrono::Local>::from(
+                            entry
+                                .metadata()
+                                .and_then(|metadata| metadata.modified())
+                                .unwrap_or(SystemTime::now()),
+                        );
+
+                        source_modified_dt.cmp(&record_modified_dt) == Ordering::Greater
+                    })
+                })
+            });
+        }
+
+        if let Ok(tx) = conn.transaction() {
+            track_entries.iter().for_each(|entry| {
+                if let Err(err) =
+                    upsert_track(&tx, &read_track_metadata(entry).expect("Music metadata."))
+                {
+                    dbg!("Failed to update database:", err);
+                };
+            });
+
+            tx.commit()?;
+        }
+
+        Ok(())
+    }
 }
 
 pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> {
@@ -38,6 +104,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> 
     stmt.query_map(named_params! {}, |row| {
         Ok(Track {
             path: row.get("path").map(|v: String| PathBuf::from(v))?,
+            modified: row.get("modified").ok(),
             title: row.get("title").ok(),
             artist: row.get("artist").ok(),
             genre: row.get("genre").ok(),
@@ -63,6 +130,7 @@ pub fn upsert_track(conn: &Connection, track: &Track) -> Result<i32, rusqlite::E
     stmt.query_row(
         named_params! {
             ":path": track.path.to_string_lossy(),
+            ":modified": track.modified,
             ":title": track.title,
             ":artist": track.artist,
             ":genre": track.genre,

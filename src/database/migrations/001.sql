@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS tracks(
   track_total TEXT,
   duration INTEGER,
 
+  modified DATETIME,
+
   path TEXT NOT NULL
 );
 

@@ -7,10 +7,10 @@ use eframe::egui::{self, FontData, FontDefinitions, FontFamily, mutex::Mutex};
 use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
 
 use crate::{
-    config::{COVER_IMAGE_URI, get_default_audio_dir_config},
-    database::{Database, get_all_tracks, upsert_track},
+    config::COVER_IMAGE_URI,
+    database::{Database, get_all_tracks},
     player::{MediaPlayer, MediaPlayerEvent},
-    track::{Track, read_track_metadata, scan_tracks},
+    track::Track,
     ui::{control_panel::ControlPanel, track_list::TrackList},
 };
 
@@ -73,39 +73,14 @@ impl App {
 
             thread::spawn(move || {
                 let database = Database::new().expect("Database connected.");
-                let track_entries = get_default_audio_dir_config()
-                    .as_deref()
-                    .map(scan_tracks)
-                    .unwrap_or_default();
-                let mut track_records =
-                    get_all_tracks(&database.get_connection()).unwrap_or_default();
 
-                if track_records.is_empty() {
-                    track_records = track_entries
-                        .iter()
-                        .map(|v| read_track_metadata(v).expect("Music metadata."))
-                        .collect();
+                database.refresh_library(false).ok();
 
-                    {
-                        if let Ok(tx) = database.get_connection().transaction() {
-                            track_records.iter().for_each(|item| {
-                                if let Err(err) = upsert_track(&tx, item) {
-                                    dbg!("Failed to update database:", err);
-                                };
-                            });
-                            tx.commit().ok();
-                        }
-                    }
-                    // NOTE: Get all tracks sorted from database.
-                    track_records = get_all_tracks(&database.get_connection()).unwrap_or_default();
-                } else {
-                    // TODO: Insert new tracks or update modified track by compare last modified time
-                    // from file and record in database.
-                }
-
-                *tracks.lock() = track_records;
+                *tracks.lock() = get_all_tracks(&database.get_connection()).unwrap_or_default();
 
                 ctx.request_repaint();
+
+                // TODO: Handle deleted tracks.
 
                 loop {
                     if let Ok(player_event) = player_rx.recv() {
