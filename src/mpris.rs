@@ -52,6 +52,10 @@ impl Mpris {
     pub fn update_progress(&mut self, state: MediaPlayback) {
         self.controls.set_playback(state).ok();
     }
+
+    pub fn set_volume(&mut self, volume: f64) {
+        self.controls.set_volume(volume).ok();
+    }
 }
 
 impl MediaPlayer {
