@@ -129,7 +129,7 @@ impl egui::Widget for ControlPanel<'_> {
                     ui.label("--:-- / --:--");
                 }
 
-                {
+                ui.scope(|ui| {
                     ui.spacing_mut().slider_width = ui.available_width();
                     let duration_slider = ui.add_enabled(
                         !self.player.is_empty(),
@@ -145,7 +145,7 @@ impl egui::Widget for ControlPanel<'_> {
                     if duration_slider.drag_stopped() {
                         self.player.play();
                     }
-                }
+                });
             });
 
             state.store(ui.ctx(), id);
