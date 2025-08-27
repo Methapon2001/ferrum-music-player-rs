@@ -144,7 +144,7 @@ impl egui::Widget for TrackList<'_> {
                             ui.label(item.artist.as_deref().unwrap_or("-"));
                         });
 
-                        if row.response().clicked() {
+                        if row.response().double_clicked() {
                             let mut track = item.to_owned();
 
                             if let Ok(front_cover) = track.read_front_cover() {
