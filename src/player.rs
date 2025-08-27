@@ -102,8 +102,14 @@ impl MediaPlayer {
     }
 
     #[inline]
-    pub fn set_volume(&self, value: f32) {
+    pub fn set_volume(&mut self, value: f32) {
+        self.mpris.set_volume(value.clamp(0.0, 1.0) as f64);
         self.sink.set_volume(value.clamp(0.0, 1.2));
+    }
+
+    #[inline]
+    pub fn get_volume(&self) -> f32 {
+        self.sink.volume()
     }
 
     #[inline]

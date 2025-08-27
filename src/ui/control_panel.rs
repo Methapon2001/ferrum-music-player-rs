@@ -100,6 +100,8 @@ impl egui::Widget for ControlPanel<'_> {
                 );
                 if volume_slider.dragged() {
                     self.player.set_volume(state.volume);
+                } else {
+                    state.volume = self.player.get_volume();
                 }
             });
 
