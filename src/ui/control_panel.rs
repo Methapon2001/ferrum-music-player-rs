@@ -119,7 +119,7 @@ impl egui::Widget for ControlPanel<'_> {
 
                 // TODO: Handle unknown total duration.
                 if !self.player.is_empty() {
-                    ui.ctx().request_repaint_after(Duration::from_millis(500));
+                    ui.ctx().request_repaint_after(Duration::from_millis(150));
                     ui.label(format!(
                         "{:02}:{:02} / {:02}:{:02}",
                         state.duration.trunc() as u64 / 60,
