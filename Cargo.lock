@@ -1290,24 +1290,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-music-player"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs",
- "eframe",
- "egui_extras",
- "font-kit",
- "image",
- "lofty",
- "rfd",
- "rodio",
- "rusqlite",
- "souvlaki",
- "walkdir",
-]
-
-[[package]]
 name = "egui-wgpu"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1620,6 +1602,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
+]
+
+[[package]]
+name = "ferrum-music-player"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs",
+ "eframe",
+ "egui_extras",
+ "font-kit",
+ "image",
+ "lofty",
+ "rfd",
+ "rodio",
+ "rusqlite",
+ "souvlaki",
+ "walkdir",
 ]
 
 [[package]]
