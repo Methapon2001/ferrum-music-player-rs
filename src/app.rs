@@ -3,11 +3,10 @@ use std::{
     thread,
 };
 
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily, mutex::Mutex};
-use font_kit::{family_name::FamilyName, handle::Handle, source::SystemSource};
+use eframe::egui::{self, mutex::Mutex};
 
 use crate::{
-    config::COVER_IMAGE_URI,
+    config::{COVER_IMAGE_URI, get_font_definitions},
     database::{Database, get_all_tracks},
     player::{MediaPlayer, MediaPlayerEvent},
     track::Track,
@@ -23,40 +22,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> App {
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
-        let mut font_definitions = FontDefinitions::default();
-
-        for name in ["Noto Sans", "Noto Sans JP", "Noto Sans CJK JP"] {
-            let buf = match SystemSource::new().select_best_match(
-                &[FamilyName::Title(name.to_string())],
-                &font_kit::properties::Properties::new(),
-            ) {
-                Ok(Handle::Memory { bytes, .. }) => Some(bytes.to_vec()),
-                Ok(Handle::Path { path, .. }) => std::fs::read(path).ok(),
-                Err(_) => None,
-            };
-
-            if let Some(buf) = buf {
-                font_definitions
-                    .font_data
-                    .insert(name.to_owned(), Arc::new(FontData::from_owned(buf)));
-
-                font_definitions
-                    .families
-                    .get_mut(&FontFamily::Proportional)
-                    .unwrap()
-                    .insert(0, name.to_owned());
-
-                font_definitions
-                    .families
-                    .get_mut(&FontFamily::Monospace)
-                    .unwrap()
-                    .push(name.to_owned());
-            }
-        }
-
-        cc.egui_ctx.set_fonts(font_definitions);
-
-        // TODO: Make this configurable.
+        cc.egui_ctx.set_fonts(get_font_definitions());
         cc.egui_ctx.options_mut(|options| {
             options.input_options.line_scroll_speed = 100.0;
         });
