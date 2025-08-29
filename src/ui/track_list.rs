@@ -129,11 +129,18 @@ impl egui::Widget for TrackList<'_> {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    ui.label(format!(
-                                        "{}.{:0>2}",
-                                        item.disc.as_deref().unwrap_or_default(),
-                                        item.track.as_deref().unwrap_or_default()
-                                    ));
+                                    let disc = item.disc.as_deref().unwrap_or_default();
+                                    let track = item.track.as_deref().unwrap_or_default();
+
+                                    match (disc.is_empty(), track.is_empty()) {
+                                        (false, false) => {
+                                            ui.label(format!("{}.{:0>2}", disc, track));
+                                        }
+                                        (true, false) => {
+                                            ui.label(format!("{:0>2}", track));
+                                        }
+                                        _ => {}
+                                    }
                                 },
                             );
                         });
