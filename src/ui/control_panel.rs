@@ -8,6 +8,8 @@ use crate::player::MediaPlayer;
 struct State {
     volume: f32,
     duration: f32,
+    seek: bool,
+    seek_while_playing: bool,
 }
 
 impl Default for State {
@@ -15,6 +17,8 @@ impl Default for State {
         Self {
             volume: 1.0,
             duration: 0.0,
+            seek: false,
+            seek_while_playing: false,
         }
     }
 }
@@ -49,17 +53,21 @@ impl egui::Widget for ControlPanel<'_> {
 
             let toggle_button = ui.add_enabled(
                 !self.player.is_empty(),
-                egui::Button::new(if self.player.is_paused() || self.player.is_empty() {
-                    (
-                        egui::Image::new(include_image!("../../assets/icons/play.svg")),
-                        "Play",
-                    )
-                } else {
-                    (
-                        egui::Image::new(include_image!("../../assets/icons/pause.svg")),
-                        "Pause",
-                    )
-                })
+                egui::Button::new(
+                    if (self.player.is_paused() || self.player.is_empty())
+                        && !(state.seek && state.seek_while_playing)
+                    {
+                        (
+                            egui::Image::new(include_image!("../../assets/icons/play.svg")),
+                            "Play",
+                        )
+                    } else {
+                        (
+                            egui::Image::new(include_image!("../../assets/icons/pause.svg")),
+                            "Pause",
+                        )
+                    },
+                )
                 .fill(Color32::TRANSPARENT)
                 .stroke(Stroke::NONE),
             );
@@ -140,12 +148,20 @@ impl egui::Widget for ControlPanel<'_> {
                             .show_value(false)
                             .step_by(0.1),
                     );
+                    if duration_slider.drag_started() {
+                        state.seek = true;
+                        state.seek_while_playing = !self.player.is_paused();
+                    }
                     if duration_slider.dragged() {
                         self.player.pause();
                         self.player.seek(Duration::from_secs_f32(state.duration))
                     }
                     if duration_slider.drag_stopped() {
-                        self.player.play();
+                        state.seek = false;
+
+                        if state.seek_while_playing {
+                            self.player.play();
+                        }
                     }
                 });
             });
