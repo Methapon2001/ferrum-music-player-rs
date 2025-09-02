@@ -113,7 +113,7 @@ impl egui::Widget for TrackList<'_> {
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if self.player.is_playing_track(item) {
+                                if !self.player.is_empty() && self.player.is_playing_track(item) {
                                     ui.image(if self.player.is_paused() {
                                         include_image!("../../assets/icons/pause.svg")
                                     } else {
