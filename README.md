@@ -18,6 +18,10 @@ There's no set schedule for when these features will be implemented.
 
 We don't plan to add online features, but we're open to pull requests.
 
+## License
+
+This project is licensed under your choice of either the MIT License or the GPLv3.
+
 ## Credits
 
 Thanks to [termusic](https://github.com/tramhao/termusic) for code references.
