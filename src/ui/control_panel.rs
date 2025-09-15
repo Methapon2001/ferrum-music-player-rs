@@ -48,6 +48,22 @@ impl egui::Widget for ControlPanel<'_> {
         let id = ui.next_auto_id();
         let mut state = State::load(ui.ctx(), id).unwrap_or_default();
 
+        if !self.player.is_empty() {
+            ui.ctx().input_mut(|i| {
+                if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
+                    self.player.seek(Duration::from_secs_f32(
+                        (state.duration - 5.0).clamp(0.0, state.duration),
+                    ));
+                }
+                if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight) {
+                    self.player
+                        .seek(Duration::from_secs_f32(state.duration + 5.0));
+                }
+            });
+        } else {
+            state.duration = 0.0;
+        }
+
         ui.horizontal(|ui| {
             let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
