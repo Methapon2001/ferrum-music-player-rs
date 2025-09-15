@@ -87,7 +87,9 @@ impl egui::Widget for TrackList<'_> {
                         ui.strong("Artist");
                     });
                 })
-                .body(|body| {
+                .body(|mut body| {
+                    body.ui_mut().style_mut().interaction.selectable_labels = false;
+
                     let tracks = self
                         .tracks
                         .iter()
