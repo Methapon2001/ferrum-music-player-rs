@@ -87,7 +87,7 @@ impl egui::Widget for TrackList<'_> {
                         ui.strong("Artist");
                     });
                 })
-                .body(|ui| {
+                .body(|body| {
                     let tracks = self
                         .tracks
                         .iter()
@@ -108,7 +108,7 @@ impl egui::Widget for TrackList<'_> {
                         })
                         .collect::<Vec<&Track>>();
 
-                    ui.rows(24.0, tracks.len(), |mut row| {
+                    body.rows(24.0, tracks.len(), |mut row| {
                         let item = tracks[row.index()];
 
                         row.col(|ui| {
