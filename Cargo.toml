@@ -4,18 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.41"
+chrono = "0.4.42"
 dirs = "6.0.0"
-eframe = { version = "0.32.2" }
+eframe = { version = "0.32.3" }
 font-kit = "0.14.3"
-image = { version = "0.25.6", features = ["png", "jpeg"] }
-rfd = { version = "0.15.3", features = ["xdg-portal"] }
+image = { version = "0.25.8", features = ["png", "jpeg"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 walkdir = "2.5.0"
 
 [dependencies.lofty]
 git = "https://github.com/Serial-ATA/lofty-rs.git"
-rev = "4f81ef4596e4ef407fefd5c5f9129af4f212c7d9"
+rev = "2727c5ce65501dc57075e3995958ecdea1ea4569"
 
 [dependencies.souvlaki]
 version = "0.8.3"
@@ -28,7 +27,7 @@ features = ["symphonia-flac", "symphonia-wav", "symphonia-mp3"]
 
 [dependencies.egui_extras]
 package = "egui_extras"
-version = "0.32.2"
+version = "0.32.3"
 features = ["image", "svg"]
 
 [profile.dev]
