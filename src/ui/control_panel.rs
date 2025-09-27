@@ -49,13 +49,13 @@ impl egui::Widget for ControlPanel<'_> {
         let mut state = State::load(ui.ctx(), id).unwrap_or_default();
 
         if !self.player.is_empty() {
-            ui.ctx().input_mut(|i| {
-                if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
+            ui.ctx().input_mut(|input_state| {
+                if input_state.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
                     self.player.seek(Duration::from_secs_f32(
                         (state.duration - 5.0).clamp(0.0, state.duration),
                     ));
                 }
-                if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight) {
+                if input_state.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight) {
                     self.player
                         .seek(Duration::from_secs_f32(state.duration + 5.0));
                 }
