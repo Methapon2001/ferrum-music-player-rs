@@ -60,6 +60,7 @@ impl egui::Widget for ControlPanel<'_> {
                         .seek(Duration::from_secs_f32(state.duration + 5.0));
                 }
             });
+            state.duration = self.player.get_position().as_secs_f32();
         } else {
             state.duration = 0.0;
         }
@@ -138,8 +139,6 @@ impl egui::Widget for ControlPanel<'_> {
                 } else {
                     1.0
                 };
-
-                state.duration = self.player.get_position().as_secs_f32();
 
                 // TODO: Handle unknown total duration.
                 if !self.player.is_empty() {
