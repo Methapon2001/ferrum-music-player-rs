@@ -1,5 +1,7 @@
 use std::{sync::mpsc::SyncSender, time::Duration};
 
+use rodio::source::SeekError;
+
 use crate::{mpris::Mpris, track::Track};
 
 pub enum MediaPlayerEvent {
@@ -88,7 +90,15 @@ impl MediaPlayer {
 
     #[inline]
     pub fn seek(&self, position: Duration) {
-        self.sink.try_seek(position).unwrap()
+        match self.sink.try_seek(position) {
+            Err(SeekError::NotSupported { .. }) => {
+                dbg!("Seeking does not support on underlying source.");
+            }
+            Err(error) => {
+                dbg!(error);
+            }
+            Ok(_) => {}
+        }
     }
 
     #[inline]
