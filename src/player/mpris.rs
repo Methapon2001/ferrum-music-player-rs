@@ -6,7 +6,7 @@ use souvlaki::{
 
 use crate::player::{MediaPlayer, MediaPlayerStatus};
 
-pub struct Mpris {
+pub(super) struct Mpris {
     controls: MediaControls,
     controls_rx: Receiver<MediaControlEvent>,
 }
@@ -59,6 +59,10 @@ impl Mpris {
 }
 
 impl MediaPlayer {
+    pub fn mpris_event(&mut self) -> Option<MediaControlEvent> {
+        self.mpris.try_recv_event()
+    }
+
     pub fn mpris_handle(&mut self, event: MediaControlEvent) {
         match event {
             MediaControlEvent::SetVolume(value) => self.set_volume(value as f32),

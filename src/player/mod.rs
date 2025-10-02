@@ -2,7 +2,10 @@ use std::{sync::mpsc::SyncSender, time::Duration};
 
 use rodio::source::SeekError;
 
-use crate::{mpris::Mpris, track::Track};
+use crate::track::Track;
+
+mod mpris;
+use mpris::Mpris;
 
 pub enum MediaPlayerEvent {
     Tick,
@@ -17,11 +20,11 @@ pub enum MediaPlayerStatus {
 
 #[allow(dead_code)]
 pub struct MediaPlayer {
-    pub stream: rodio::OutputStream,
-    pub sink: rodio::Sink,
-    pub mpris: Mpris,
-    pub status: MediaPlayerStatus,
-    pub track: Option<Track>,
+    stream: rodio::OutputStream,
+    sink: rodio::Sink,
+    mpris: Mpris,
+    status: MediaPlayerStatus,
+    track: Option<Track>,
 }
 
 impl MediaPlayer {
@@ -42,9 +45,8 @@ impl MediaPlayer {
     }
 
     pub fn add(&mut self, track: Track) {
-        self.mpris.play(track.as_ref().into());
-
         if let Ok(file) = std::fs::File::open(track.path.as_path()) {
+            self.mpris.play(track.as_ref().into());
             self.track = Some(track);
 
             self.sink.clear();
