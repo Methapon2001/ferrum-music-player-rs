@@ -53,7 +53,7 @@ impl App {
                         match player_event {
                             MediaPlayerEvent::Tick => {
                                 let mut player = player.lock();
-                                if let Some(mpris_event) = player.mpris.try_recv_event() {
+                                if let Some(mpris_event) = player.mpris_event() {
                                     player.mpris_handle(mpris_event);
                                 }
                             }
