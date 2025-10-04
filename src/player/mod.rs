@@ -1,6 +1,6 @@
 use std::{sync::mpsc::SyncSender, time::Duration};
 
-use rodio::source::SeekError;
+use rodio::{OutputStream, OutputStreamBuilder, Sink, source::SeekError};
 
 use crate::track::Track;
 
@@ -9,6 +9,9 @@ use mpris::Mpris;
 
 pub enum MediaPlayerEvent {
     Tick,
+
+    PlaybackEnded,
+    PlaybackProgress,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -20,27 +23,32 @@ pub enum MediaPlayerStatus {
 
 #[allow(dead_code)]
 pub struct MediaPlayer {
-    stream: rodio::OutputStream,
-    sink: rodio::Sink,
+    player_tx: SyncSender<MediaPlayerEvent>,
+
+    stream: OutputStream,
+    sink: Sink,
     mpris: Mpris,
     status: MediaPlayerStatus,
+
     track: Option<Track>,
 }
 
 impl MediaPlayer {
     pub fn new(player_tx: SyncSender<MediaPlayerEvent>) -> Self {
-        let stream =
-            rodio::OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
-        let sink = rodio::Sink::connect_new(stream.mixer());
+        let stream = OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
+        let sink = Sink::connect_new(stream.mixer());
+
+        let mpris = Mpris::new(player_tx.clone());
 
         Self {
-            status: MediaPlayerStatus::Stopped,
+            player_tx,
+
             stream,
             sink,
-            mpris: Mpris::new(Some(move || {
-                player_tx.send(MediaPlayerEvent::Tick).ok();
-            })),
+            mpris,
+
             track: None,
+            status: MediaPlayerStatus::Stopped,
         }
     }
 
