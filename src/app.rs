@@ -46,7 +46,7 @@ impl App {
 
                 ctx.request_repaint();
 
-                // TODO: Handle deleted tracks.
+                // TODO: Load playlist(s).
 
                 loop {
                     if let Ok(player_event) = player_rx.recv() {
@@ -56,6 +56,17 @@ impl App {
                                 if let Some(mpris_event) = player.mpris_event() {
                                     player.mpris_handle(mpris_event);
                                 }
+                                ctx.request_repaint();
+                            }
+                            MediaPlayerEvent::PlaybackEnded => {
+                                // TODO: Implement playlist logic
+
+                                // NOTE: Repaint is needed after doing something with playlist and
+                                // player so that the UI state isn't stale.
+                                ctx.request_repaint();
+                            }
+                            MediaPlayerEvent::PlaybackProgress => {
+                                player.lock().mpris_update_progress();
                             }
                         }
                     }
@@ -70,8 +81,6 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut player = self.player.lock();
-
-        player.mpris_update_progress();
 
         egui::TopBottomPanel::bottom("controls")
             .show_separator_line(true)

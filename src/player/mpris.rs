@@ -1,10 +1,10 @@
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
 
-use crate::player::{MediaPlayer, MediaPlayerStatus};
+use crate::player::{MediaPlayer, MediaPlayerEvent, MediaPlayerStatus};
 
 pub(super) struct Mpris {
     controls: MediaControls,
@@ -12,10 +12,7 @@ pub(super) struct Mpris {
 }
 
 impl Mpris {
-    pub fn new<T>(handle_submit: Option<T>) -> Self
-    where
-        T: Fn() + Send + 'static,
-    {
+    pub fn new(player_tx: SyncSender<MediaPlayerEvent>) -> Self {
         let mut controls = MediaControls::new(PlatformConfig {
             dbus_name: "ferrum_player_rs",
             display_name: "Ferrum Player",
@@ -28,10 +25,7 @@ impl Mpris {
         controls
             .attach(move |event| {
                 controls_tx.send(event.to_owned()).ok();
-
-                if let Some(handle) = &handle_submit {
-                    handle();
-                }
+                player_tx.send(MediaPlayerEvent::Tick).ok();
             })
             .ok();
 
