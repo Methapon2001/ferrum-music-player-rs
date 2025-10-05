@@ -1573,6 +1573,7 @@ dependencies = [
  "font-kit",
  "image",
  "lofty",
+ "parking_lot",
  "rodio",
  "rusqlite",
  "souvlaki",

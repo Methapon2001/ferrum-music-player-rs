@@ -9,6 +9,7 @@ dirs = "6.0.0"
 eframe = { version = "0.32.3" }
 font-kit = "0.14.3"
 image = { version = "0.25.8", features = ["png", "jpeg"] }
+parking_lot = "0.12"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 walkdir = "2.5.0"
 
@@ -29,6 +30,3 @@ features = ["symphonia-flac", "symphonia-wav", "symphonia-mp3"]
 package = "egui_extras"
 version = "0.32.3"
 features = ["image", "svg"]
-
-[profile.dev]
-opt-level = 1
