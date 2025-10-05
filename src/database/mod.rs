@@ -8,7 +8,7 @@ use std::{
 };
 
 use chrono::DateTime;
-use eframe::egui::mutex::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard};
 use rusqlite::{Connection, named_params};
 
 use crate::{

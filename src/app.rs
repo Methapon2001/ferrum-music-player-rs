@@ -3,7 +3,8 @@ use std::{
     thread,
 };
 
-use eframe::egui::{self, mutex::Mutex};
+use eframe::egui;
+use parking_lot::Mutex;
 
 use crate::{
     config::{COVER_IMAGE_URI, get_font_definitions},
