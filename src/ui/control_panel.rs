@@ -60,7 +60,7 @@ impl egui::Widget for ControlPanel<'_> {
                         .seek(Duration::from_secs_f32(state.duration + 5.0));
                 }
             });
-            state.duration = self.player.get_position().as_secs_f32();
+            state.duration = self.player.position().as_secs_f32();
         } else {
             state.duration = 0.0;
         }
@@ -126,7 +126,7 @@ impl egui::Widget for ControlPanel<'_> {
                 if volume_slider.dragged() {
                     self.player.set_volume(state.volume);
                 } else {
-                    state.volume = self.player.get_volume();
+                    state.volume = self.player.volume();
                 }
             });
 
@@ -134,7 +134,7 @@ impl egui::Widget for ControlPanel<'_> {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // NOTE: Default to 1.0 so slider handle will be at the start.
-                let total_duration = if let Some(track) = &self.player.get_track() {
+                let total_duration = if let Some(track) = &self.player.current_track() {
                     track.duration.map(|t| t.as_secs_f32()).unwrap_or(1.0)
                 } else {
                     1.0

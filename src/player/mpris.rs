@@ -1,4 +1,4 @@
-use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
@@ -12,9 +12,9 @@ pub(super) struct Mpris {
 }
 
 impl Mpris {
-    pub fn new(player_tx: SyncSender<MediaPlayerEvent>) -> Self {
+    pub fn new(player_tx: Sender<MediaPlayerEvent>) -> Self {
         let mut controls = MediaControls::new(PlatformConfig {
-            dbus_name: "ferrum_player_rs",
+            dbus_name: "org.ferrum.Player",
             display_name: "Ferrum Player",
             hwnd: None,
         })
@@ -39,16 +39,16 @@ impl Mpris {
         self.controls_rx.try_recv().ok()
     }
 
-    pub fn play(&mut self, metadata: MediaMetadata) {
+    pub fn set_metadata(&mut self, metadata: MediaMetadata) {
         self.controls.set_metadata(metadata).ok();
-    }
-
-    pub fn update_progress(&mut self, state: MediaPlayback) {
-        self.controls.set_playback(state).ok();
     }
 
     pub fn set_volume(&mut self, volume: f64) {
         self.controls.set_volume(volume).ok();
+    }
+
+    pub fn update_progress(&mut self, state: MediaPlayback) {
+        self.controls.set_playback(state).ok();
     }
 }
 
@@ -77,11 +77,11 @@ impl MediaPlayer {
 
     pub fn mpris_update_progress(&mut self) {
         self.mpris.update_progress(match self.status {
-            MediaPlayerStatus::Running => MediaPlayback::Playing {
-                progress: Some(MediaPosition(self.get_position())),
+            MediaPlayerStatus::Playing => MediaPlayback::Playing {
+                progress: Some(MediaPosition(self.position())),
             },
             MediaPlayerStatus::Paused => MediaPlayback::Paused {
-                progress: Some(MediaPosition(self.get_position())),
+                progress: Some(MediaPosition(self.position())),
             },
             MediaPlayerStatus::Stopped => MediaPlayback::Stopped,
         });
