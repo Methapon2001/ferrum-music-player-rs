@@ -119,7 +119,6 @@ impl egui::Widget for TrackList<'_> {
                             if state.search.is_empty() {
                                 return true;
                             }
-
                             format!(
                                 "{} {} {}",
                                 item.album.as_deref().unwrap_or(""),
@@ -137,7 +136,9 @@ impl egui::Widget for TrackList<'_> {
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if !self.player.is_empty() && self.player.is_playing_track(item) {
+                                if !self.player.is_empty()
+                                    && self.player.current_track().is_some_and(|t| item.eq(t))
+                                {
                                     ui.image(if self.player.is_paused() {
                                         include_image!("../../assets/icons/pause.svg")
                                     } else {
@@ -182,14 +183,13 @@ impl egui::Widget for TrackList<'_> {
                                 track.cover = front_cover;
                             }
 
-                            if let Some(current_track) = self.player.get_track()
+                            if let Some(current_track) = self.player.current_track()
                                 && current_track.cover != track.cover
                             {
                                 ctx.forget_image(COVER_IMAGE_URI);
                             }
 
                             self.player.add(track);
-                            self.player.play();
                         }
                     });
                 });

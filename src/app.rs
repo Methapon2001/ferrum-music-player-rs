@@ -28,7 +28,7 @@ impl App {
             options.input_options.line_scroll_speed = 100.0;
         });
 
-        let (player_tx, player_rx) = mpsc::sync_channel(0);
+        let (player_tx, player_rx) = mpsc::channel();
         let player = Arc::new(Mutex::new(MediaPlayer::new(player_tx)));
 
         let tracks = Arc::new(Mutex::new(Vec::new()));
@@ -83,35 +83,33 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut player = self.player.lock();
 
+        let frame = egui::frame::Frame::new()
+            .fill(ctx.style().visuals.panel_fill)
+            .inner_margin(12);
+
         egui::TopBottomPanel::bottom("controls")
-            .show_separator_line(true)
+            .frame(frame)
             .show(ctx, |ui| {
-                ui.add_space(10.0);
-
                 ui.add(ControlPanel::new(&mut player));
-
-                ui.add_space(10.0);
-
                 // TODO: Scan progress.
             });
 
         egui::SidePanel::left("music_metadata")
+            .frame(frame)
             .resizable(false)
             .show(ctx, |ui| {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
                 if !player.is_empty()
-                    && let Some(cover) =
-                        player.get_track().as_ref().and_then(|v| v.cover.as_deref())
+                    && let Some(cover) = player.current_track().and_then(|v| v.cover.as_deref())
                 {
                     cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
-                        .show_loading_spinner(false);
                 }
 
                 ui.add_sized([275.0, 275.0], cover_image);
 
-                if let Some(current_track) = player.get_track()
+                if let Some(current_track) = player.current_track()
                     && !player.is_empty()
                 {
                     ui.vertical_centered(|ui| {
@@ -134,7 +132,7 @@ impl eframe::App for App {
                 }
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.add(TrackList::new(&mut player, self.tracks.lock().as_slice()));
         });
     }
