@@ -22,17 +22,13 @@ pub fn get_font_definitions() -> FontDefinitions {
                 .font_data
                 .insert(name.to_owned(), Arc::new(FontData::from_owned(buf)));
 
-            font_definitions
-                .families
-                .get_mut(&FontFamily::Proportional)
-                .unwrap()
-                .insert(0, name.to_owned());
+            if let Some(val) = font_definitions.families.get_mut(&FontFamily::Proportional) {
+                val.insert(0, name.to_owned());
+            }
 
-            font_definitions
-                .families
-                .get_mut(&FontFamily::Monospace)
-                .unwrap()
-                .push(name.to_owned());
+            if let Some(val) = font_definitions.families.get_mut(&FontFamily::Monospace) {
+                val.insert(0, name.to_owned());
+            }
         }
     }
 
