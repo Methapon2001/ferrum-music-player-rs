@@ -50,6 +50,17 @@ impl egui::Widget for ControlPanel<'_> {
 
         if !self.player.is_empty() {
             ui.ctx().input_mut(|input_state| {
+                if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Space) {
+                    if self.player.is_empty() {
+                        return;
+                    }
+
+                    if self.player.is_paused() {
+                        self.player.play();
+                    } else {
+                        self.player.pause();
+                    }
+                }
                 if input_state.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
                     self.player.seek(Duration::from_secs_f32(
                         (state.duration - 5.0).clamp(0.0, state.duration),
