@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Stroke, include_image};
 
-use crate::player::MediaPlayer;
+use crate::player::MusicPlayer;
 
 #[derive(Clone)]
 struct State {
@@ -34,11 +34,11 @@ impl State {
 }
 
 pub struct ControlPanel<'a> {
-    player: &'a mut MediaPlayer,
+    player: &'a mut MusicPlayer,
 }
 
 impl<'a> ControlPanel<'a> {
-    pub fn new(player: &'a mut MediaPlayer) -> Self {
+    pub fn new(player: &'a mut MusicPlayer) -> Self {
         Self { player }
     }
 }

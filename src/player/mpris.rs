@@ -4,7 +4,7 @@ use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
 
-use crate::player::{MediaPlayer, MediaPlayerEvent, MediaPlayerStatus};
+use crate::player::{MusicPlayer, MusicPlayerEvent, MusicPlayerStatus};
 
 pub(super) struct Mpris {
     controls: MediaControls,
@@ -12,7 +12,7 @@ pub(super) struct Mpris {
 }
 
 impl Mpris {
-    pub fn new(player_tx: Sender<MediaPlayerEvent>) -> Self {
+    pub fn new(player_tx: Sender<MusicPlayerEvent>) -> Self {
         let mut controls = MediaControls::new(PlatformConfig {
             dbus_name: "org.ferrum.Player",
             display_name: "Ferrum Player",
@@ -25,7 +25,7 @@ impl Mpris {
         controls
             .attach(move |event| {
                 controls_tx.send(event.to_owned()).ok();
-                player_tx.send(MediaPlayerEvent::Tick).ok();
+                player_tx.send(MusicPlayerEvent::Tick).ok();
             })
             .ok();
 
@@ -52,7 +52,7 @@ impl Mpris {
     }
 }
 
-impl MediaPlayer {
+impl MusicPlayer {
     pub fn mpris_event(&mut self) -> Option<MediaControlEvent> {
         self.mpris.try_recv_event()
     }
@@ -71,19 +71,19 @@ impl MediaPlayer {
         }
 
         if self.is_empty() {
-            self.status = MediaPlayerStatus::Stopped;
+            self.status = MusicPlayerStatus::Stopped;
         }
     }
 
     pub fn mpris_update_progress(&mut self) {
         self.mpris.update_progress(match self.status {
-            MediaPlayerStatus::Playing => MediaPlayback::Playing {
+            MusicPlayerStatus::Playing => MediaPlayback::Playing {
                 progress: Some(MediaPosition(self.position())),
             },
-            MediaPlayerStatus::Paused => MediaPlayback::Paused {
+            MusicPlayerStatus::Paused => MediaPlayback::Paused {
                 progress: Some(MediaPosition(self.position())),
             },
-            MediaPlayerStatus::Stopped => MediaPlayback::Stopped,
+            MusicPlayerStatus::Stopped => MediaPlayback::Stopped,
         });
     }
 }

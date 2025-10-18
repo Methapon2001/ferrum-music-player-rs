@@ -118,7 +118,6 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> 
                 .get("duration")
                 .map(|v: i32| Duration::from_secs(u64::try_from(v.max(0)).unwrap()))
                 .ok(),
-            ..Default::default()
         })
     })?
     .collect()

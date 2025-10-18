@@ -4,9 +4,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use rodio::{Source, mixer::Mixer, queue, source::EmptyCallback};
+use rodio::{Source, mixer::Mixer, queue};
 
-use crate::player::MediaPlayerEvent;
+use super::MusicPlayerEvent;
+use super::source::DoneCallback;
 
 struct Controls {
     pause: AtomicBool,
@@ -20,7 +21,7 @@ struct Controls {
 ///
 /// Dropping the `Sink` stops all sounds.
 pub(super) struct Sink {
-    player_tx: Sender<MediaPlayerEvent>,
+    player_tx: Sender<MusicPlayerEvent>,
 
     queue: Arc<queue::SourcesQueueInput>,
     controls: Arc<Controls>,
@@ -29,7 +30,7 @@ pub(super) struct Sink {
 }
 
 impl Sink {
-    pub fn new(mixer: &Mixer, player_tx: Sender<MediaPlayerEvent>) -> Self {
+    pub fn new(mixer: &Mixer, player_tx: Sender<MusicPlayerEvent>) -> Self {
         // TODO: Create custom queue to support source modification (e.g., crossfade)
         let (queue, source) = queue::queue(true);
 
@@ -63,52 +64,49 @@ impl Sink {
             self.controls.stopped.store(false, Ordering::SeqCst);
         }
 
-        {
-            let player_tx = self.player_tx.clone();
-            let controls = self.controls.clone();
-            let source = source
-                .track_position()
-                .pausable(false)
-                .amplify(1.0)
-                .skippable()
-                .periodic_access(Duration::from_millis(5), move |s| {
-                    if controls.stopped.load(Ordering::SeqCst) {
-                        s.skip();
-                        *controls.position.lock() = Duration::ZERO;
-                    }
+        let player_tx = self.player_tx.clone();
+        let controls = self.controls.clone();
+        let source = source
+            .track_position()
+            .pausable(false)
+            .amplify(1.0)
+            .skippable()
+            .periodic_access(Duration::from_millis(5), move |s| {
+                if controls.stopped.load(Ordering::SeqCst) {
+                    s.skip();
+                    *controls.position.lock() = Duration::ZERO;
+                }
 
-                    let amplify = s.inner_mut();
-                    amplify.set_factor(*controls.volume.lock());
+                let amplify = s.inner_mut();
+                amplify.set_factor(*controls.volume.lock());
 
-                    let pausable = amplify.inner_mut();
-                    pausable.set_paused(controls.pause.load(Ordering::SeqCst));
+                let pausable = amplify.inner_mut();
+                pausable.set_paused(controls.pause.load(Ordering::SeqCst));
 
-                    let track_position = pausable.inner_mut();
-                    *controls.position.lock() = track_position.get_pos();
+                let track_position = pausable.inner_mut();
+                *controls.position.lock() = track_position.get_pos();
 
-                    if let Some(seek) = controls.seek.lock().take() {
-                        let _ = s.try_seek(seek);
-                    }
-                })
-                .periodic_access(Duration::from_millis(500), move |_| {
-                    player_tx.send(MediaPlayerEvent::PlaybackProgress).ok();
-                });
+                if let Some(seek) = controls.seek.lock().take() {
+                    let _ = s.try_seek(seek);
+                }
+            })
+            .periodic_access(Duration::from_millis(500), move |_| {
+                player_tx.send(MusicPlayerEvent::PlaybackProgress).ok();
+            });
 
-            self.queue.append(source);
-        }
+        let controls = self.controls.clone();
+        let player_tx = self.player_tx.clone();
+        let source = DoneCallback::new(source, move || {
+            if controls.stopped.load(Ordering::SeqCst) {
+                player_tx.send(MusicPlayerEvent::PlaybackStopped).ok();
+            } else {
+                player_tx.send(MusicPlayerEvent::PlaybackEnded).ok();
+            }
 
-        {
-            // NOTE: Add callback source at the end to emit event to player.
-            // This eliminate the need to spawn thread and wait until end.
-            let controls = self.controls.clone();
-            let player_tx = self.player_tx.clone();
-            let callback = EmptyCallback::new(Box::new(move || {
-                controls.stopped.store(true, Ordering::SeqCst);
-                player_tx.send(MediaPlayerEvent::PlaybackEnded).ok();
-            }));
+            controls.stopped.store(true, Ordering::SeqCst);
+        });
 
-            *self.sleep_until_end.lock() = Some(self.queue.append_with_signal(callback));
-        }
+        *self.sleep_until_end.lock() = Some(self.queue.append_with_signal(source));
     }
 
     #[inline]

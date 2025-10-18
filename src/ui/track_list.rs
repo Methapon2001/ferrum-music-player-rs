@@ -1,6 +1,6 @@
 use eframe::egui::{self, include_image};
 
-use crate::{config::COVER_IMAGE_URI, player::MediaPlayer, track::Track};
+use crate::{player::MusicPlayer, playlist::Playlist, track::Track};
 
 #[derive(Default, Clone)]
 struct State {
@@ -18,13 +18,13 @@ impl State {
 }
 
 pub struct TrackList<'a> {
-    player: &'a mut MediaPlayer,
-    tracks: &'a [Track],
+    player: &'a mut MusicPlayer,
+    playlist: &'a mut Playlist,
 }
 
 impl<'a> TrackList<'a> {
-    pub fn new(player: &'a mut MediaPlayer, tracks: &'a [Track]) -> Self {
-        Self { player, tracks }
+    pub fn new(player: &'a mut MusicPlayer, playlist: &'a mut Playlist) -> Self {
+        Self { player, playlist }
     }
 }
 
@@ -74,7 +74,7 @@ impl egui::Widget for TrackList<'_> {
                 .striped(true)
                 .resizable(true)
                 .auto_shrink(false)
-                .column(Column::initial(width * 0.1).at_least(30.0).clip(true))
+                .column(Column::initial(width * 0.1).at_least(48.0).clip(true))
                 .column(
                     Column::initial(width * 0.3)
                         .at_least(width * 0.2)
@@ -113,9 +113,11 @@ impl egui::Widget for TrackList<'_> {
                     body.ui_mut().style_mut().interaction.selectable_labels = false;
 
                     let tracks = self
-                        .tracks
+                        .playlist
+                        .tracks()
                         .iter()
-                        .filter(|item| {
+                        .enumerate()
+                        .filter(|(_index, item)| {
                             if state.search.is_empty() {
                                 return true;
                             }
@@ -129,15 +131,21 @@ impl egui::Widget for TrackList<'_> {
                             .trim()
                             .contains(&state.search.to_lowercase())
                         })
-                        .collect::<Vec<&Track>>();
+                        .collect::<Vec<(usize, &Track)>>();
+
+                    // NOTE: To avoid tracks clone, store double clicked index and handle later.
+                    let mut double_clicked_index: Option<usize> = None;
 
                     body.rows(24.0, tracks.len(), |mut row| {
-                        let item = tracks[row.index()];
+                        let (index, item) = tracks[row.index()];
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
                                 if !self.player.is_empty()
-                                    && self.player.current_track().is_some_and(|t| item.eq(t))
+                                    && self
+                                        .player
+                                        .current_track()
+                                        .is_some_and(|track| track.eq(item))
                                 {
                                     ui.image(if self.player.is_paused() {
                                         include_image!("../../assets/icons/pause.svg")
@@ -177,21 +185,16 @@ impl egui::Widget for TrackList<'_> {
                         });
 
                         if row.response().double_clicked() {
-                            let mut track = item.to_owned();
-
-                            if let Ok(front_cover) = track.read_front_cover() {
-                                track.cover = front_cover;
-                            }
-
-                            if let Some(current_track) = self.player.current_track()
-                                && current_track.cover != track.cover
-                            {
-                                ctx.forget_image(COVER_IMAGE_URI);
-                            }
-
-                            self.player.add(track);
+                            double_clicked_index = Some(index);
                         }
                     });
+
+                    if let Some(index) = double_clicked_index {
+                        let track = self.playlist.tracks()[index].to_owned();
+
+                        self.playlist.set_current_track_index(index.to_owned());
+                        self.player.play_track(track);
+                    }
                 });
 
             state.store(&ctx, id);
