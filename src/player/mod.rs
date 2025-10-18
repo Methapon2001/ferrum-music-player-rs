@@ -11,34 +11,38 @@ use mpris::Mpris;
 mod sink;
 use sink::Sink;
 
-pub enum MediaPlayerEvent {
+mod source;
+
+pub enum MusicPlayerEvent {
     Tick,
 
-    PlaybackEnded,
+    PlaybackStarted,
     PlaybackProgress,
+    PlaybackStopped,
+    PlaybackEnded,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum MediaPlayerStatus {
+pub enum MusicPlayerStatus {
     Stopped,
     Playing,
     Paused,
 }
 
-#[allow(dead_code)]
-pub struct MediaPlayer {
-    player_tx: Sender<MediaPlayerEvent>,
+pub struct MusicPlayer {
+    player_tx: Sender<MusicPlayerEvent>,
 
+    #[allow(dead_code)]
     stream: OutputStream,
     sink: Sink,
     mpris: Mpris,
-    status: MediaPlayerStatus,
+    status: MusicPlayerStatus,
 
     track: Option<Track>,
 }
 
-impl MediaPlayer {
-    pub fn new(player_tx: Sender<MediaPlayerEvent>) -> Self {
+impl MusicPlayer {
+    pub fn new(player_tx: Sender<MusicPlayerEvent>) -> Self {
         let stream = OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
         let sink = Sink::new(stream.mixer(), player_tx.clone());
         let mpris = Mpris::new(player_tx.clone());
@@ -51,11 +55,11 @@ impl MediaPlayer {
             mpris,
 
             track: None,
-            status: MediaPlayerStatus::Stopped,
+            status: MusicPlayerStatus::Stopped,
         }
     }
 
-    pub fn add(&mut self, track: Track) {
+    pub fn play_track(&mut self, track: Track) {
         self.sink.stop();
 
         if let Ok(file) = std::fs::File::open(track.path.as_path()) {
@@ -69,8 +73,10 @@ impl MediaPlayer {
             self.sink.add(rodio::Decoder::try_from(file).unwrap());
             self.sink.play();
 
-            self.track = Some(track);
-            self.status = MediaPlayerStatus::Playing;
+            self.status = MusicPlayerStatus::Playing;
+            self.track = Some(track.clone());
+
+            self.player_tx.send(MusicPlayerEvent::PlaybackStarted).ok();
         }
     }
 
@@ -87,8 +93,7 @@ impl MediaPlayer {
         }
 
         self.sink.play();
-        self.status = MediaPlayerStatus::Playing;
-        self.mpris_update_progress();
+        self.status = MusicPlayerStatus::Playing;
     }
 
     #[inline]
@@ -98,15 +103,13 @@ impl MediaPlayer {
         }
 
         self.sink.pause();
-        self.status = MediaPlayerStatus::Paused;
-        self.mpris_update_progress();
+        self.status = MusicPlayerStatus::Paused;
     }
 
     #[inline]
     pub fn stop(&mut self) {
         self.sink.stop();
-        self.status = MediaPlayerStatus::Stopped;
-        self.mpris_update_progress();
+        self.status = MusicPlayerStatus::Stopped;
     }
 
     #[inline]

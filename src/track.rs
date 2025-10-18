@@ -31,7 +31,6 @@ pub struct Track {
     pub disc_total: Option<String>,
     pub track: Option<String>,
     pub track_total: Option<String>,
-    pub cover: Option<Vec<u8>>,
 }
 
 impl Track {
@@ -133,7 +132,6 @@ pub fn read_track_metadata(path: &Path) -> Result<Track, LoftyError> {
             track: tag.get_string(ItemKey::TrackNumber).map(String::from),
             track_total: tag.get_string(ItemKey::TrackTotal).map(String::from),
             duration: Some(tagged.properties().duration()),
-            cover: None,
         },
     ))
 }
