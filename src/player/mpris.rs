@@ -61,6 +61,8 @@ impl MusicPlayer {
         match event {
             MediaControlEvent::SetVolume(value) => self.set_volume(value as f32),
             MediaControlEvent::Play => self.play(),
+            MediaControlEvent::Next => self.play_next(),
+            MediaControlEvent::Previous => self.play_previous(),
             MediaControlEvent::Pause => self.pause(),
             MediaControlEvent::Toggle => self.toggle(),
             MediaControlEvent::Stop => self.stop(),
@@ -70,7 +72,7 @@ impl MusicPlayer {
             }
         }
 
-        if self.is_empty() {
+        if self.is_stopped() {
             self.status = MusicPlayerStatus::Stopped;
         }
     }

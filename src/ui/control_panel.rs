@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Stroke, include_image};
 
-use crate::player::MusicPlayer;
+use crate::{player::MusicPlayer, playlist::PlaylistMode};
 
 #[derive(Clone)]
 struct State {
@@ -48,7 +48,7 @@ impl egui::Widget for ControlPanel<'_> {
         let id = ui.next_auto_id();
         let mut state = State::load(ui.ctx(), id).unwrap_or_default();
 
-        if !self.player.is_empty() {
+        if !self.player.is_stopped() {
             let mut widget_focused = false;
 
             ui.ctx().memory(|memory| {
@@ -60,7 +60,7 @@ impl egui::Widget for ControlPanel<'_> {
             if !widget_focused {
                 ui.ctx().input_mut(|input_state| {
                     if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Space) {
-                        if self.player.is_empty() {
+                        if self.player.is_stopped() {
                             return;
                         }
 
@@ -89,49 +89,90 @@ impl egui::Widget for ControlPanel<'_> {
         ui.horizontal(|ui| {
             let slider_handle = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
-            let toggle_button = ui.add_enabled(
-                !self.player.is_empty(),
-                egui::Button::new(
-                    if (self.player.is_paused() || self.player.is_empty())
-                        && !(state.seek && state.seek_while_playing)
-                    {
-                        (
-                            egui::Image::new(include_image!("../../assets/icons/play.svg")),
-                            "Play",
-                        )
-                    } else {
-                        (
-                            egui::Image::new(include_image!("../../assets/icons/pause.svg")),
-                            "Pause",
-                        )
-                    },
-                )
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::NONE),
-            );
-            let stop_button = ui.add_enabled(
-                !self.player.is_empty(),
-                egui::Button::new((
-                    egui::Image::new(include_image!("../../assets/icons/stop.svg")),
-                    "Stop",
-                ))
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::NONE),
-            );
+            ui.scope(|ui| {
+                ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
 
-            match (toggle_button.clicked(), self.player.is_paused()) {
-                (true, true) => {
-                    self.player.play();
-                }
-                (true, false) => {
-                    self.player.pause();
-                }
-                _ => {}
-            }
+                let stop_button = ui.add_enabled(
+                    !self.player.is_stopped(),
+                    egui::Button::new(egui::Image::new(include_image!(
+                        "../../assets/icons/stop.svg"
+                    )))
+                    .stroke(Stroke::NONE),
+                );
+                let skip_backward_button = ui.add_enabled(
+                    !self.player.is_stopped(),
+                    egui::Button::new(egui::Image::new(include_image!(
+                        "../../assets/icons/skip-backward.svg"
+                    )))
+                    .stroke(Stroke::NONE),
+                );
+                let toggle_button = ui.add_enabled(
+                    !self.player.is_stopped(),
+                    egui::Button::new(
+                        if (self.player.is_paused() || self.player.is_stopped())
+                            && !(state.seek && state.seek_while_playing)
+                        {
+                            egui::Image::new(include_image!("../../assets/icons/play.svg"))
+                        } else {
+                            egui::Image::new(include_image!("../../assets/icons/pause.svg"))
+                        },
+                    )
+                    .stroke(Stroke::NONE),
+                );
+                let skip_forward_button = ui.add_enabled(
+                    !self.player.is_stopped(),
+                    egui::Button::new(egui::Image::new(include_image!(
+                        "../../assets/icons/skip-forward.svg"
+                    )))
+                    .stroke(Stroke::NONE),
+                );
+                let mode_button = ui.add(
+                    egui::Button::new(match self.player.playlist().mode() {
+                        PlaylistMode::NoRepeat => {
+                            egui::Image::new(include_image!("../../assets/icons/no-repeat.svg"))
+                        }
+                        PlaylistMode::Repeat => {
+                            egui::Image::new(include_image!("../../assets/icons/repeat.svg"))
+                        }
+                        PlaylistMode::RepeatSingle => {
+                            egui::Image::new(include_image!("../../assets/icons/repeat-one.svg"))
+                        }
+                        PlaylistMode::Shuffle => {
+                            egui::Image::new(include_image!("../../assets/icons/shuffle.svg"))
+                        }
+                    })
+                    .stroke(Stroke::NONE),
+                );
 
-            if stop_button.clicked() {
-                self.player.stop();
-            }
+                match (toggle_button.clicked(), self.player.is_paused()) {
+                    (true, true) => {
+                        self.player.play();
+                    }
+                    (true, false) => {
+                        self.player.pause();
+                    }
+                    _ => {}
+                }
+                if stop_button.clicked() {
+                    self.player.stop();
+                }
+                if skip_backward_button.clicked() {
+                    self.player.play_previous();
+                }
+                if skip_forward_button.clicked() {
+                    self.player.play_next();
+                }
+                if mode_button.clicked() {
+                    let playlist = self.player.playlist_mut();
+
+                    match playlist.mode() {
+                        PlaylistMode::NoRepeat => playlist.set_mode(PlaylistMode::Repeat),
+                        PlaylistMode::Repeat => playlist.set_mode(PlaylistMode::RepeatSingle),
+                        PlaylistMode::RepeatSingle => playlist.set_mode(PlaylistMode::Shuffle),
+                        PlaylistMode::Shuffle => playlist.set_mode(PlaylistMode::NoRepeat),
+                    }
+                }
+            });
 
             ui.separator();
 
@@ -162,7 +203,7 @@ impl egui::Widget for ControlPanel<'_> {
                 };
 
                 // TODO: Handle unknown total duration.
-                if !self.player.is_empty() {
+                if !self.player.is_stopped() {
                     ui.ctx().request_repaint_after(Duration::from_millis(150));
                     ui.label(format!(
                         "{:02}:{:02} / {:02}:{:02}",
@@ -178,7 +219,7 @@ impl egui::Widget for ControlPanel<'_> {
                 ui.scope(|ui| {
                     ui.spacing_mut().slider_width = ui.available_width();
                     let duration_slider = ui.add_enabled(
-                        !self.player.is_empty(),
+                        !self.player.is_stopped(),
                         egui::Slider::new(&mut state.duration, 0.0..=total_duration)
                             .handle_shape(slider_handle)
                             .show_value(false)

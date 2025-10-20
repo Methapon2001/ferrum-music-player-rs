@@ -3,10 +3,7 @@ use std::{
     thread,
 };
 
-use eframe::egui::{
-    self, CornerRadius, Visuals,
-    style::{WidgetVisuals, Widgets},
-};
+use eframe::egui;
 use parking_lot::Mutex;
 
 use crate::{
@@ -19,7 +16,6 @@ use crate::{
 
 pub struct App {
     player: Arc<Mutex<MusicPlayer>>,
-    playlist: Arc<Mutex<Playlist>>,
     cover: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
@@ -34,12 +30,10 @@ impl App {
 
         let (player_tx, player_rx) = mpsc::channel();
         let player = Arc::new(Mutex::new(MusicPlayer::new(player_tx)));
-        let playlist = Arc::new(Mutex::new(Playlist::new(Vec::new())));
         let cover = Arc::new(Mutex::new(None));
 
         {
             let player = player.clone();
-            let playlist = playlist.clone();
             let cover = cover.clone();
             let ctx = cc.egui_ctx.clone();
 
@@ -50,7 +44,7 @@ impl App {
 
                 // NOTE: Default playlist is the library.
                 // TODO: Separate library and playlist.
-                *playlist.lock() =
+                *player.lock().playlist_mut() =
                     Playlist::new(get_all_tracks(&database.get_connection()).unwrap_or_default());
 
                 ctx.request_repaint();
@@ -91,12 +85,7 @@ impl App {
                                 player.mpris_update_progress();
                             }
                             MusicPlayerEvent::PlaybackEnded => {
-                                let mut playlist = playlist.lock();
-
-                                if let Some(track) = playlist.next_track() {
-                                    player.play_track(track.to_owned());
-                                }
-
+                                player.play_next();
                                 // NOTE: Repaint is needed after doing something with playlist and
                                 // player so that the UI state isn't stale.
                                 ctx.request_repaint();
@@ -108,18 +97,13 @@ impl App {
             });
         }
 
-        Self {
-            player,
-            playlist,
-            cover,
-        }
+        Self { player, cover }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut player = self.player.lock();
-        let mut playlist = self.playlist.lock();
 
         let frame = egui::frame::Frame::new()
             .fill(ctx.style().visuals.panel_fill)
@@ -139,7 +123,7 @@ impl eframe::App for App {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
-                if !player.is_empty()
+                if !player.is_stopped()
                     && let Some(cover) = self.cover.lock().as_deref()
                 {
                     cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
@@ -159,7 +143,7 @@ impl eframe::App for App {
                 ui.add_sized(COVER_IMAGE_SIZE, cover_image);
 
                 if let Some(current_track) = player.current_track()
-                    && !player.is_empty()
+                    && !player.is_stopped()
                 {
                     ui.vertical_centered(|ui| {
                         match (
@@ -182,7 +166,7 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            ui.add(TrackList::new(&mut player, &mut playlist));
+            ui.add(TrackList::new(&mut player));
         });
     }
 }

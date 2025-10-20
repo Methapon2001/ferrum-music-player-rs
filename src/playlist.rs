@@ -2,12 +2,11 @@ use rand::{Rng, seq::SliceRandom};
 
 use crate::track::Track;
 
-#[derive(Default)]
 pub enum PlaylistMode {
-    #[default]
-    Playlist,
-    Random,
-    Single,
+    NoRepeat,
+    Repeat,
+    RepeatSingle,
+    Shuffle,
 }
 
 pub struct Playlist {
@@ -21,7 +20,7 @@ pub struct Playlist {
 impl Playlist {
     pub fn new(tracks: Vec<Track>) -> Self {
         Self {
-            mode: PlaylistMode::Playlist,
+            mode: PlaylistMode::Repeat,
             tracks,
 
             current_index: 0,
@@ -29,12 +28,9 @@ impl Playlist {
         }
     }
 
-    pub fn set_current_track_index(&mut self, index: usize) {
+    pub fn select_track(&mut self, index: usize) {
+        self.previous_index = Vec::new();
         self.current_index = index;
-    }
-
-    pub fn get_current_track_index(&self) -> usize {
-        self.current_index
     }
 
     pub fn current_track(&self) -> Option<&Track> {
@@ -43,18 +39,21 @@ impl Playlist {
 
     pub fn next_track(&mut self) -> Option<&Track> {
         match self.mode {
-            PlaylistMode::Playlist => {
-                self.previous_index.push(self.current_index);
+            PlaylistMode::Repeat => {
                 self.current_index += 1;
                 self.current_track()
             }
-            PlaylistMode::Random => {
+            PlaylistMode::RepeatSingle => self.current_track(),
+            PlaylistMode::Shuffle => {
                 let mut rng = rand::rng();
                 self.previous_index.push(self.current_index);
                 self.current_index = rng.random_range(0..self.tracks.len());
                 self.current_track()
             }
-            PlaylistMode::Single => self.current_track(),
+            PlaylistMode::NoRepeat => {
+                self.previous_index = Vec::new();
+                None
+            }
         }
     }
 
@@ -72,15 +71,28 @@ impl Playlist {
         self.tracks.as_slice()
     }
 
+    pub fn set_mode(&mut self, mode: PlaylistMode) {
+        self.mode = mode;
+    }
+
+    pub fn mode(&self) -> &PlaylistMode {
+        &self.mode
+    }
+
     pub fn shuffle(&mut self) {
         self.tracks.shuffle(&mut rand::rng());
     }
 
     pub fn clear(&mut self) {
         self.tracks = Vec::new();
+        self.previous_index = Vec::new();
     }
 
     pub fn append(&mut self, track: Track) {
         self.tracks.push(track);
+    }
+
+    pub fn append_multiple(&mut self, tracks: Vec<Track>) {
+        self.tracks.append(&mut tracks.clone());
     }
 }

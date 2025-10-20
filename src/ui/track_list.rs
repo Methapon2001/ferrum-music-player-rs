@@ -1,6 +1,7 @@
-use eframe::egui::{self, include_image};
+use eframe::egui;
+use eframe::egui::include_image;
 
-use crate::{player::MusicPlayer, playlist::Playlist, track::Track};
+use crate::{player::MusicPlayer, track::Track};
 
 #[derive(Default, Clone)]
 struct State {
@@ -19,12 +20,11 @@ impl State {
 
 pub struct TrackList<'a> {
     player: &'a mut MusicPlayer,
-    playlist: &'a mut Playlist,
 }
 
 impl<'a> TrackList<'a> {
-    pub fn new(player: &'a mut MusicPlayer, playlist: &'a mut Playlist) -> Self {
-        Self { player, playlist }
+    pub fn new(player: &'a mut MusicPlayer) -> Self {
+        Self { player }
     }
 }
 
@@ -113,7 +113,8 @@ impl egui::Widget for TrackList<'_> {
                     body.ui_mut().style_mut().interaction.selectable_labels = false;
 
                     let tracks = self
-                        .playlist
+                        .player
+                        .playlist()
                         .tracks()
                         .iter()
                         .enumerate()
@@ -141,17 +142,20 @@ impl egui::Widget for TrackList<'_> {
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if !self.player.is_empty()
+                                if !self.player.is_stopped()
                                     && self
                                         .player
                                         .current_track()
                                         .is_some_and(|track| track.eq(item))
                                 {
-                                    ui.image(if self.player.is_paused() {
-                                        include_image!("../../assets/icons/pause.svg")
-                                    } else {
-                                        include_image!("../../assets/icons/play.svg")
-                                    });
+                                    ui.add(
+                                        egui::Image::new(if self.player.is_paused() {
+                                            include_image!("../../assets/icons/pause.svg")
+                                        } else {
+                                            include_image!("../../assets/icons/play.svg")
+                                        })
+                                        .max_size((16.0, 16.0).into()),
+                                    );
                                 }
                             });
                         });
@@ -190,9 +194,9 @@ impl egui::Widget for TrackList<'_> {
                     });
 
                     if let Some(index) = double_clicked_index {
-                        let track = self.playlist.tracks()[index].to_owned();
+                        let track = self.player.playlist().tracks()[index].to_owned();
 
-                        self.playlist.set_current_track_index(index.to_owned());
+                        self.player.playlist_mut().select_track(index.to_owned());
                         self.player.play_track(track);
                     }
                 });

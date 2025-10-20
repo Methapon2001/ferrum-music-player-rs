@@ -3,7 +3,7 @@ use std::{sync::mpsc::Sender, time::Duration};
 use rodio::{OutputStream, OutputStreamBuilder};
 use souvlaki::MediaMetadata;
 
-use crate::track::Track;
+use crate::{playlist::Playlist, track::Track};
 
 mod mpris;
 use mpris::Mpris;
@@ -38,6 +38,7 @@ pub struct MusicPlayer {
     mpris: Mpris,
     status: MusicPlayerStatus,
 
+    playlist: Playlist,
     track: Option<Track>,
 }
 
@@ -55,6 +56,7 @@ impl MusicPlayer {
             mpris,
 
             track: None,
+            playlist: Playlist::new(Vec::new()),
             status: MusicPlayerStatus::Stopped,
         }
     }
@@ -74,10 +76,38 @@ impl MusicPlayer {
             self.sink.play();
 
             self.status = MusicPlayerStatus::Playing;
-            self.track = Some(track.clone());
+            self.track = Some(track);
 
             self.player_tx.send(MusicPlayerEvent::PlaybackStarted).ok();
         }
+    }
+
+    #[inline]
+    pub fn play_next(&mut self) {
+        if let Some(track) = self.playlist.next_track().map(|t| t.to_owned()) {
+            self.play_track(track);
+        } else {
+            self.stop();
+        }
+    }
+
+    #[inline]
+    pub fn play_previous(&mut self) {
+        if self.position().as_millis() > 500 {
+            self.seek(Duration::from_secs(0));
+        } else if let Some(track) = self.playlist.previous_track().map(|t| t.to_owned()) {
+            self.play_track(track);
+        }
+    }
+
+    #[inline]
+    pub fn playlist(&self) -> &Playlist {
+        &self.playlist
+    }
+
+    #[inline]
+    pub fn playlist_mut(&mut self) -> &mut Playlist {
+        &mut self.playlist
     }
 
     #[inline]
@@ -133,7 +163,7 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub fn is_stopped(&self) -> bool {
         self.sink.is_empty()
     }
 
