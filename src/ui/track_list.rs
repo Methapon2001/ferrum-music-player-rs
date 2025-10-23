@@ -38,12 +38,34 @@ impl egui::Widget for TrackList<'_> {
         let mut state = State::load(&ctx, id).unwrap_or_default();
 
         ui.vertical(|ui| {
-            ui.add_sized(
+            let search_box_response = ui.add_sized(
                 [ui.available_width(), 30.0],
                 egui::TextEdit::singleline(&mut state.search)
                     .vertical_align(egui::Align::Center)
                     .hint_text("Search"),
             );
+
+            let mut widget_focused = false;
+
+            ui.ctx().memory(|memory| {
+                if memory.focused().is_some() {
+                    widget_focused = true;
+                }
+            });
+
+            if !widget_focused {
+                let mut search_box_request_focus = false;
+
+                ui.ctx().input_mut(|input_state| {
+                    if input_state.consume_key(egui::Modifiers::CTRL, egui::Key::F) {
+                        search_box_request_focus = true;
+                    }
+                });
+
+                if search_box_request_focus {
+                    search_box_response.request_focus();
+                }
+            }
 
             let width = ui.available_width();
 
