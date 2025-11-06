@@ -7,16 +7,16 @@ use eframe::egui;
 use parking_lot::Mutex;
 
 use crate::{
-    config::{COVER_IMAGE_URI, get_font_definitions},
+    config::{COVER_IMAGE_SIZE, COVER_IMAGE_URI, get_font_definitions},
     database::{Database, get_all_tracks},
-    player::{MediaPlayer, MediaPlayerEvent},
-    track::Track,
+    player::{MusicPlayer, MusicPlayerEvent},
+    playlist::Playlist,
     ui::{control_panel::ControlPanel, track_list::TrackList},
 };
 
 pub struct App {
-    player: Arc<Mutex<MediaPlayer>>,
-    tracks: Arc<Mutex<Vec<Track>>>,
+    player: Arc<Mutex<MusicPlayer>>,
+    cover: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
 impl App {
@@ -28,14 +28,13 @@ impl App {
             options.input_options.line_scroll_speed = 100.0;
         });
 
-        let (player_tx, player_rx) = mpsc::sync_channel(0);
-        let player = Arc::new(Mutex::new(MediaPlayer::new(player_tx)));
-
-        let tracks = Arc::new(Mutex::new(Vec::new()));
+        let (player_tx, player_rx) = mpsc::channel();
+        let player = Arc::new(Mutex::new(MusicPlayer::new(player_tx)));
+        let cover = Arc::new(Mutex::new(None));
 
         {
-            let tracks = tracks.clone();
             let player = player.clone();
+            let cover = cover.clone();
             let ctx = cc.egui_ctx.clone();
 
             thread::spawn(move || {
@@ -43,28 +42,62 @@ impl App {
 
                 database.refresh_library(false).ok();
 
-                *tracks.lock() = get_all_tracks(&database.get_connection()).unwrap_or_default();
+                // NOTE: Default playlist is the library.
+                // TODO: Separate library and playlist.
+                *player.lock().playlist_mut() =
+                    Playlist::new(get_all_tracks(&database.get_connection()).unwrap_or_default());
 
                 ctx.request_repaint();
 
-                // TODO: Handle deleted tracks.
+                // TODO: Load playlist(s).
 
                 loop {
                     if let Ok(player_event) = player_rx.recv() {
+                        let mut player = player.lock();
+
                         match player_event {
-                            MediaPlayerEvent::Tick => {
-                                let mut player = player.lock();
+                            MusicPlayerEvent::Tick => {
                                 if let Some(mpris_event) = player.mpris_event() {
                                     player.mpris_handle(mpris_event);
                                 }
+                                ctx.request_repaint();
                             }
+                            MusicPlayerEvent::PlaybackStarted => {
+                                let mut cover = cover.lock();
+
+                                if let Some(track) = player.current_track()
+                                    && let Ok(front_cover) = track.read_front_cover()
+                                {
+                                    if cover.ne(&front_cover) {
+                                        *cover = front_cover;
+
+                                        ctx.forget_image(COVER_IMAGE_URI);
+                                    }
+                                } else if cover.is_some() {
+                                    *cover = None;
+
+                                    ctx.forget_image(COVER_IMAGE_URI);
+                                }
+
+                                ctx.request_repaint();
+                            }
+                            MusicPlayerEvent::PlaybackProgress => {
+                                player.mpris_update_progress();
+                            }
+                            MusicPlayerEvent::PlaybackEnded => {
+                                player.play_next();
+                                // NOTE: Repaint is needed after doing something with playlist and
+                                // player so that the UI state isn't stale.
+                                ctx.request_repaint();
+                            }
+                            _ => {}
                         }
                     }
                 }
             });
         }
 
-        Self { player, tracks }
+        Self { player, cover }
     }
 }
 
@@ -72,38 +105,45 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut player = self.player.lock();
 
-        player.mpris_update_progress();
+        let frame = egui::frame::Frame::new()
+            .fill(ctx.style().visuals.panel_fill)
+            .inner_margin(12);
 
         egui::TopBottomPanel::bottom("controls")
-            .show_separator_line(true)
+            .frame(frame)
             .show(ctx, |ui| {
-                ui.add_space(10.0);
-
                 ui.add(ControlPanel::new(&mut player));
-
-                ui.add_space(10.0);
-
                 // TODO: Scan progress.
             });
 
         egui::SidePanel::left("music_metadata")
+            .frame(frame)
             .resizable(false)
             .show(ctx, |ui| {
                 let mut cover_image =
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
-                if !player.is_empty()
-                    && let Some(cover) =
-                        player.get_track().as_ref().and_then(|v| v.cover.as_deref())
+                if !player.is_stopped()
+                    && let Some(cover) = self.cover.lock().as_deref()
                 {
                     cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
-                        .show_loading_spinner(false);
                 }
 
-                ui.add_sized([275.0, 275.0], cover_image);
+                let mut cursor = ui.cursor();
 
-                if let Some(current_track) = player.get_track()
-                    && !player.is_empty()
+                cursor.set_width(COVER_IMAGE_SIZE.0);
+                cursor.set_height(COVER_IMAGE_SIZE.1);
+
+                ui.painter().rect_filled(
+                    cursor,
+                    ctx.style().noninteractive().corner_radius,
+                    ctx.style().visuals.extreme_bg_color,
+                );
+
+                ui.add_sized(COVER_IMAGE_SIZE, cover_image);
+
+                if let Some(current_track) = player.current_track()
+                    && !player.is_stopped()
                 {
                     ui.vertical_centered(|ui| {
                         match (
@@ -125,8 +165,8 @@ impl eframe::App for App {
                 }
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(TrackList::new(&mut player, self.tracks.lock().as_slice()));
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
+            ui.add(TrackList::new(&mut player));
         });
     }
 }

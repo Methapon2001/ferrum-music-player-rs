@@ -1,10 +1,10 @@
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
 
-use crate::player::{MediaPlayer, MediaPlayerStatus};
+use crate::player::{MusicPlayer, MusicPlayerEvent, MusicPlayerStatus};
 
 pub(super) struct Mpris {
     controls: MediaControls,
@@ -12,12 +12,9 @@ pub(super) struct Mpris {
 }
 
 impl Mpris {
-    pub fn new<T>(handle_submit: Option<T>) -> Self
-    where
-        T: Fn() + Send + 'static,
-    {
+    pub fn new(player_tx: Sender<MusicPlayerEvent>) -> Self {
         let mut controls = MediaControls::new(PlatformConfig {
-            dbus_name: "ferrum_player_rs",
+            dbus_name: "org.ferrum.Player",
             display_name: "Ferrum Player",
             hwnd: None,
         })
@@ -28,10 +25,7 @@ impl Mpris {
         controls
             .attach(move |event| {
                 controls_tx.send(event.to_owned()).ok();
-
-                if let Some(handle) = &handle_submit {
-                    handle();
-                }
+                player_tx.send(MusicPlayerEvent::Tick).ok();
             })
             .ok();
 
@@ -45,20 +39,20 @@ impl Mpris {
         self.controls_rx.try_recv().ok()
     }
 
-    pub fn play(&mut self, metadata: MediaMetadata) {
+    pub fn set_metadata(&mut self, metadata: MediaMetadata) {
         self.controls.set_metadata(metadata).ok();
-    }
-
-    pub fn update_progress(&mut self, state: MediaPlayback) {
-        self.controls.set_playback(state).ok();
     }
 
     pub fn set_volume(&mut self, volume: f64) {
         self.controls.set_volume(volume).ok();
     }
+
+    pub fn update_progress(&mut self, state: MediaPlayback) {
+        self.controls.set_playback(state).ok();
+    }
 }
 
-impl MediaPlayer {
+impl MusicPlayer {
     pub fn mpris_event(&mut self) -> Option<MediaControlEvent> {
         self.mpris.try_recv_event()
     }
@@ -67,6 +61,8 @@ impl MediaPlayer {
         match event {
             MediaControlEvent::SetVolume(value) => self.set_volume(value as f32),
             MediaControlEvent::Play => self.play(),
+            MediaControlEvent::Next => self.play_next(),
+            MediaControlEvent::Previous => self.play_previous(),
             MediaControlEvent::Pause => self.pause(),
             MediaControlEvent::Toggle => self.toggle(),
             MediaControlEvent::Stop => self.stop(),
@@ -76,20 +72,20 @@ impl MediaPlayer {
             }
         }
 
-        if self.is_empty() {
-            self.status = MediaPlayerStatus::Stopped;
+        if self.is_stopped() {
+            self.status = MusicPlayerStatus::Stopped;
         }
     }
 
     pub fn mpris_update_progress(&mut self) {
         self.mpris.update_progress(match self.status {
-            MediaPlayerStatus::Running => MediaPlayback::Playing {
-                progress: Some(MediaPosition(self.get_position())),
+            MusicPlayerStatus::Playing => MediaPlayback::Playing {
+                progress: Some(MediaPosition(self.position())),
             },
-            MediaPlayerStatus::Paused => MediaPlayback::Paused {
-                progress: Some(MediaPosition(self.get_position())),
+            MusicPlayerStatus::Paused => MediaPlayback::Paused {
+                progress: Some(MediaPosition(self.position())),
             },
-            MediaPlayerStatus::Stopped => MediaPlayback::Stopped,
+            MusicPlayerStatus::Stopped => MediaPlayback::Stopped,
         });
     }
 }

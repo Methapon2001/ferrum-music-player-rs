@@ -1,84 +1,145 @@
-use std::{sync::mpsc::SyncSender, time::Duration};
+use std::{sync::mpsc::Sender, time::Duration};
 
-use rodio::source::SeekError;
+use rodio::{OutputStream, OutputStreamBuilder};
+use souvlaki::MediaMetadata;
 
-use crate::track::Track;
+use crate::{playlist::Playlist, track::Track};
 
 mod mpris;
 use mpris::Mpris;
 
-pub enum MediaPlayerEvent {
+mod sink;
+use sink::Sink;
+
+mod source;
+
+pub enum MusicPlayerEvent {
     Tick,
+
+    PlaybackStarted,
+    PlaybackProgress,
+    PlaybackStopped,
+    PlaybackEnded,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum MediaPlayerStatus {
+pub enum MusicPlayerStatus {
     Stopped,
-    Running,
+    Playing,
     Paused,
 }
 
-#[allow(dead_code)]
-pub struct MediaPlayer {
-    stream: rodio::OutputStream,
-    sink: rodio::Sink,
+pub struct MusicPlayer {
+    player_tx: Sender<MusicPlayerEvent>,
+
+    #[allow(dead_code)]
+    stream: OutputStream,
+    sink: Sink,
     mpris: Mpris,
-    status: MediaPlayerStatus,
+    status: MusicPlayerStatus,
+
+    playlist: Playlist,
     track: Option<Track>,
 }
 
-impl MediaPlayer {
-    pub fn new(player_tx: SyncSender<MediaPlayerEvent>) -> Self {
-        let stream =
-            rodio::OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
-        let sink = rodio::Sink::connect_new(stream.mixer());
+impl MusicPlayer {
+    pub fn new(player_tx: Sender<MusicPlayerEvent>) -> Self {
+        let stream = OutputStreamBuilder::open_default_stream().expect("Audio output stream.");
+        let sink = Sink::new(stream.mixer(), player_tx.clone());
+        let mpris = Mpris::new(player_tx.clone());
 
         Self {
-            status: MediaPlayerStatus::Stopped,
+            player_tx,
+
             stream,
             sink,
-            mpris: Mpris::new(Some(move || {
-                player_tx.send(MediaPlayerEvent::Tick).ok();
-            })),
+            mpris,
+
             track: None,
+            playlist: Playlist::new(Vec::new()),
+            status: MusicPlayerStatus::Stopped,
         }
     }
 
-    pub fn add(&mut self, track: Track) {
+    pub fn play_track(&mut self, track: Track) {
+        self.sink.stop();
+
         if let Ok(file) = std::fs::File::open(track.path.as_path()) {
-            self.mpris.play(track.as_ref().into());
+            self.mpris.set_metadata(MediaMetadata {
+                album: track.as_ref().album.as_deref(),
+                title: track.as_ref().title.as_deref(),
+                artist: track.as_ref().artist.as_deref(),
+                duration: track.as_ref().duration,
+                cover_url: None,
+            });
+            self.sink.add(rodio::Decoder::try_from(file).unwrap());
+            self.sink.play();
+
+            self.status = MusicPlayerStatus::Playing;
             self.track = Some(track);
 
-            self.sink.clear();
-            self.sink.append(rodio::Decoder::try_from(file).unwrap());
+            self.player_tx.send(MusicPlayerEvent::PlaybackStarted).ok();
         }
+    }
+
+    #[inline]
+    pub fn play_next(&mut self) {
+        if let Some(track) = self.playlist.next_track().map(|t| t.to_owned()) {
+            self.play_track(track);
+        } else {
+            self.stop();
+        }
+    }
+
+    #[inline]
+    pub fn play_previous(&mut self) {
+        if self.position().as_millis() > 500 {
+            self.seek(Duration::from_secs(0));
+        } else if let Some(track) = self.playlist.previous_track().map(|t| t.to_owned()) {
+            self.play_track(track);
+        }
+    }
+
+    #[inline]
+    pub fn playlist(&self) -> &Playlist {
+        &self.playlist
+    }
+
+    #[inline]
+    pub fn playlist_mut(&mut self) -> &mut Playlist {
+        &mut self.playlist
     }
 
     #[inline]
     pub fn play(&mut self) {
-        if self.sink.empty() {
+        if self.sink.is_empty() {
+            if let Some(track) = &self.track
+                && let Ok(file) = std::fs::File::open(track.path.as_path())
+            {
+                self.sink.add(rodio::Decoder::try_from(file).unwrap());
+            }
+
             return;
         }
 
-        self.status = MediaPlayerStatus::Running;
         self.sink.play();
+        self.status = MusicPlayerStatus::Playing;
     }
 
     #[inline]
     pub fn pause(&mut self) {
-        if self.sink.empty() {
+        if self.sink.is_empty() {
             return;
         }
 
-        self.status = MediaPlayerStatus::Paused;
         self.sink.pause();
+        self.status = MusicPlayerStatus::Paused;
     }
 
     #[inline]
     pub fn stop(&mut self) {
-        self.status = MediaPlayerStatus::Stopped;
         self.sink.stop();
-        self.sink.clear();
+        self.status = MusicPlayerStatus::Stopped;
     }
 
     #[inline]
@@ -91,16 +152,9 @@ impl MediaPlayer {
     }
 
     #[inline]
-    pub fn seek(&self, position: Duration) {
-        match self.sink.try_seek(position) {
-            Err(SeekError::NotSupported { .. }) => {
-                dbg!("Seeking does not support on underlying source.");
-            }
-            Err(error) => {
-                dbg!(error);
-            }
-            Ok(_) => {}
-        }
+    pub fn seek(&mut self, position: Duration) {
+        self.sink.seek(position);
+        self.mpris_update_progress();
     }
 
     #[inline]
@@ -109,8 +163,8 @@ impl MediaPlayer {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.sink.empty()
+    pub fn is_stopped(&self) -> bool {
+        self.sink.is_empty()
     }
 
     #[inline]
@@ -120,27 +174,17 @@ impl MediaPlayer {
     }
 
     #[inline]
-    pub fn get_volume(&self) -> f32 {
+    pub fn volume(&self) -> f32 {
         self.sink.volume()
     }
 
     #[inline]
-    pub fn get_position(&self) -> Duration {
-        self.sink.get_pos()
+    pub fn position(&self) -> Duration {
+        self.sink.position()
     }
 
     #[inline]
-    pub fn get_track(&self) -> Option<&Track> {
+    pub fn current_track(&self) -> Option<&Track> {
         self.track.as_ref()
-    }
-
-    pub fn is_playing_track(&self, track: &Track) -> bool {
-        if let Some(current_track) = self.get_track()
-            && current_track.path == track.path
-        {
-            current_track.path == track.path
-        } else {
-            false
-        }
     }
 }

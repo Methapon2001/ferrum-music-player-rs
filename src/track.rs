@@ -14,11 +14,10 @@ use lofty::{
     probe::Probe,
     tag::ItemKey,
 };
-use souvlaki::MediaMetadata;
 use walkdir::WalkDir;
 
 #[allow(unused)]
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Debug)]
 pub struct Track {
     pub path: PathBuf,
     pub modified: Option<String>,
@@ -32,7 +31,6 @@ pub struct Track {
     pub disc_total: Option<String>,
     pub track: Option<String>,
     pub track_total: Option<String>,
-    pub cover: Option<Vec<u8>>,
 }
 
 impl Track {
@@ -47,21 +45,15 @@ impl Track {
     }
 }
 
-impl AsRef<Track> for Track {
-    fn as_ref(&self) -> &Track {
-        self
+impl PartialEq for Track {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
     }
 }
 
-impl<'a> From<&'a Track> for MediaMetadata<'a> {
-    fn from(val: &'a Track) -> Self {
-        MediaMetadata {
-            album: val.album.as_deref(),
-            title: val.title.as_deref(),
-            artist: val.artist.as_deref(),
-            duration: val.duration,
-            cover_url: None,
-        }
+impl AsRef<Track> for Track {
+    fn as_ref(&self) -> &Track {
+        self
     }
 }
 
@@ -140,7 +132,6 @@ pub fn read_track_metadata(path: &Path) -> Result<Track, LoftyError> {
             track: tag.get_string(ItemKey::TrackNumber).map(String::from),
             track_total: tag.get_string(ItemKey::TrackTotal).map(String::from),
             duration: Some(tagged.properties().duration()),
-            cover: None,
         },
     ))
 }

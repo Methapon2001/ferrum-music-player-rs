@@ -1,6 +1,7 @@
-use eframe::egui::{self, include_image};
+use eframe::egui;
+use eframe::egui::include_image;
 
-use crate::{config::COVER_IMAGE_URI, player::MediaPlayer, track::Track};
+use crate::{player::MusicPlayer, track::Track};
 
 #[derive(Default, Clone)]
 struct State {
@@ -18,13 +19,12 @@ impl State {
 }
 
 pub struct TrackList<'a> {
-    player: &'a mut MediaPlayer,
-    tracks: &'a [Track],
+    player: &'a mut MusicPlayer,
 }
 
 impl<'a> TrackList<'a> {
-    pub fn new(player: &'a mut MediaPlayer, tracks: &'a [Track]) -> Self {
-        Self { player, tracks }
+    pub fn new(player: &'a mut MusicPlayer) -> Self {
+        Self { player }
     }
 }
 
@@ -74,7 +74,7 @@ impl egui::Widget for TrackList<'_> {
                 .striped(true)
                 .resizable(true)
                 .auto_shrink(false)
-                .column(Column::initial(width * 0.1).at_least(30.0).clip(true))
+                .column(Column::initial(width * 0.1).at_least(48.0).clip(true))
                 .column(
                     Column::initial(width * 0.3)
                         .at_least(width * 0.2)
@@ -113,13 +113,15 @@ impl egui::Widget for TrackList<'_> {
                     body.ui_mut().style_mut().interaction.selectable_labels = false;
 
                     let tracks = self
-                        .tracks
+                        .player
+                        .playlist()
+                        .tracks()
                         .iter()
-                        .filter(|item| {
+                        .enumerate()
+                        .filter(|(_index, item)| {
                             if state.search.is_empty() {
                                 return true;
                             }
-
                             format!(
                                 "{} {} {}",
                                 item.album.as_deref().unwrap_or(""),
@@ -130,19 +132,30 @@ impl egui::Widget for TrackList<'_> {
                             .trim()
                             .contains(&state.search.to_lowercase())
                         })
-                        .collect::<Vec<&Track>>();
+                        .collect::<Vec<(usize, &Track)>>();
+
+                    // NOTE: To avoid tracks clone, store double clicked index and handle later.
+                    let mut double_clicked_index: Option<usize> = None;
 
                     body.rows(24.0, tracks.len(), |mut row| {
-                        let item = tracks[row.index()];
+                        let (index, item) = tracks[row.index()];
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if !self.player.is_empty() && self.player.is_playing_track(item) {
-                                    ui.image(if self.player.is_paused() {
-                                        include_image!("../../assets/icons/pause.svg")
-                                    } else {
-                                        include_image!("../../assets/icons/play.svg")
-                                    });
+                                if !self.player.is_stopped()
+                                    && self
+                                        .player
+                                        .current_track()
+                                        .is_some_and(|track| track.eq(item))
+                                {
+                                    ui.add(
+                                        egui::Image::new(if self.player.is_paused() {
+                                            include_image!("../../assets/icons/pause.svg")
+                                        } else {
+                                            include_image!("../../assets/icons/play.svg")
+                                        })
+                                        .max_size((16.0, 16.0).into()),
+                                    );
                                 }
                             });
                         });
@@ -176,22 +189,16 @@ impl egui::Widget for TrackList<'_> {
                         });
 
                         if row.response().double_clicked() {
-                            let mut track = item.to_owned();
-
-                            if let Ok(front_cover) = track.read_front_cover() {
-                                track.cover = front_cover;
-                            }
-
-                            if let Some(current_track) = self.player.get_track()
-                                && current_track.cover != track.cover
-                            {
-                                ctx.forget_image(COVER_IMAGE_URI);
-                            }
-
-                            self.player.add(track);
-                            self.player.play();
+                            double_clicked_index = Some(index);
                         }
                     });
+
+                    if let Some(index) = double_clicked_index {
+                        let track = self.player.playlist().tracks()[index].to_owned();
+
+                        self.player.playlist_mut().select_track(index.to_owned());
+                        self.player.play_track(track);
+                    }
                 });
 
             state.store(&ctx, id);

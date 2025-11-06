@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use eframe::egui::{FontData, FontDefinitions, FontFamily};
 
 pub const COVER_IMAGE_URI: &str = "bytes://music_cover";
+pub const COVER_IMAGE_SIZE: (f32, f32) = (275., 275.);
 
 pub fn get_font_definitions() -> FontDefinitions {
     let mut font_definitions = FontDefinitions::default();
