@@ -128,9 +128,9 @@ impl egui::Widget for TrackList<'_> {
                                 item.title.as_deref().unwrap_or(""),
                                 item.artist.as_deref().unwrap_or(""),
                             )
-                            .to_lowercase()
+                            .to_ascii_lowercase()
                             .trim()
-                            .contains(&state.search.to_lowercase())
+                            .contains(&state.search.to_ascii_lowercase())
                         })
                         .collect::<Vec<(usize, &Track)>>();
 
