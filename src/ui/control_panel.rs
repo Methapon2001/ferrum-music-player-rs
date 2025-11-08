@@ -51,14 +51,14 @@ impl egui::Widget for ControlPanel<'_> {
         if !self.player.is_stopped() {
             let mut widget_focused = false;
 
-            ui.ctx().memory(|memory| {
+            ui.memory(|memory| {
                 if memory.focused().is_some() {
                     widget_focused = true;
                 }
             });
 
             if !widget_focused {
-                ui.ctx().input_mut(|input_state| {
+                ui.input_mut(|input_state| {
                     if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Space) {
                         if self.player.is_stopped() {
                             return;
