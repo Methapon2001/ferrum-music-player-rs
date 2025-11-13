@@ -26,7 +26,13 @@ features = ["use_zbus"]
 [dependencies.rodio]
 version = "0.21.1"
 default-features = false
-features = ["playback", "symphonia-flac", "symphonia-wav", "symphonia-mp3"]
+features = [
+  "playback",
+  "symphonia-flac",
+  "symphonia-wav",
+  "symphonia-pcm",
+  "symphonia-mp3",
+]
 
 [dependencies.egui_extras]
 package = "egui_extras"
