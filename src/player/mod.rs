@@ -54,7 +54,7 @@ impl MusicPlayer {
             sink,
             mpris,
 
-            playlist: Playlist::new(Vec::new()),
+            playlist: Playlist::new("Default", Vec::new()),
             status: MusicPlayerStatus::Stopped,
         }
     }

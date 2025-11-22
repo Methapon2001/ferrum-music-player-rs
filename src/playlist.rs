@@ -2,6 +2,7 @@ use rand::{Rng as _, seq::SliceRandom as _};
 
 use crate::track::Track;
 
+#[derive(Debug)]
 pub enum PlaylistMode {
     NoRepeat,
     Repeat,
@@ -9,7 +10,9 @@ pub enum PlaylistMode {
     Shuffle,
 }
 
+#[derive(Debug)]
 pub struct Playlist {
+    name: String,
     mode: PlaylistMode,
     tracks: Vec<Track>,
 
@@ -18,8 +21,9 @@ pub struct Playlist {
 }
 
 impl Playlist {
-    pub fn new(tracks: Vec<Track>) -> Self {
+    pub fn new(name: &str, tracks: Vec<Track>) -> Self {
         Self {
+            name: name.to_owned(),
             mode: PlaylistMode::Repeat,
             tracks,
 
@@ -30,7 +34,11 @@ impl Playlist {
 
     pub fn select_track(&mut self, index: usize) {
         self.previous_index = Vec::new();
-        self.current_index = index;
+        self.current_index = index.clamp(0, self.tracks.len() - 1);
+    }
+
+    pub fn current_track_index(&self) -> usize {
+        self.current_index
     }
 
     pub fn current_track(&self) -> Option<&Track> {
@@ -41,6 +49,11 @@ impl Playlist {
         match self.mode {
             PlaylistMode::Repeat => {
                 self.current_index += 1;
+
+                if self.current_index >= self.tracks.len() {
+                    self.current_index = 0;
+                }
+
                 self.current_track()
             }
             PlaylistMode::RepeatSingle => self.current_track(),
@@ -71,12 +84,24 @@ impl Playlist {
         self.tracks.as_slice()
     }
 
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_owned();
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
     pub fn set_mode(&mut self, mode: PlaylistMode) {
         self.mode = mode;
     }
 
     pub fn mode(&self) -> &PlaylistMode {
         &self.mode
+    }
+
+    pub fn position(&self) -> usize {
+        self.current_index
     }
 
     pub fn shuffle(&mut self) {
@@ -94,5 +119,11 @@ impl Playlist {
 
     pub fn append_multiple(&mut self, mut tracks: Vec<Track>) {
         self.tracks.append(&mut tracks);
+    }
+}
+
+impl PartialEq for Playlist {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
     }
 }
