@@ -2,12 +2,26 @@ use eframe::egui;
 use eframe::egui::include_image;
 use egui_extras::{Column, TableBuilder};
 
-use crate::{player::MusicPlayer, track::Track};
+use crate::track::Track;
+
+pub type TrackIndex = usize;
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrackListAction {
+    Play(TrackIndex),
+    Select(TrackIndex),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrackListIndicator {
+    Playing(TrackIndex),
+    Paused(TrackIndex),
+}
 
 #[derive(Default, Clone)]
 struct State {
     search: String,
-    selected_index: Option<usize>,
+    selected_index: Option<TrackIndex>,
 }
 
 impl State {
@@ -21,12 +35,22 @@ impl State {
 }
 
 pub struct TrackList<'a> {
-    player: &'a mut MusicPlayer,
+    action: &'a mut Option<TrackListAction>,
+    tracks: &'a [Track],
+    indicator: Option<TrackListIndicator>,
 }
 
 impl<'a> TrackList<'a> {
-    pub fn new(player: &'a mut MusicPlayer) -> Self {
-        Self { player }
+    pub fn new(
+        action: &'a mut Option<TrackListAction>,
+        tracks: &'a [Track],
+        indicator: Option<TrackListIndicator>,
+    ) -> Self {
+        Self {
+            action,
+            tracks,
+            indicator,
+        }
     }
 }
 
@@ -58,7 +82,7 @@ impl egui::Widget for TrackList<'_> {
                     if let Some(selected) = state.selected_index.as_mut() {
                         *selected = selected.saturating_sub(1);
                     } else {
-                        state.selected_index = Some(usize::MAX);
+                        state.selected_index = Some(TrackIndex::MAX);
                     }
                     select_changed = true;
                 }
@@ -66,7 +90,7 @@ impl egui::Widget for TrackList<'_> {
                     if let Some(selected) = state.selected_index.as_mut() {
                         *selected = selected.saturating_add(1);
                     } else {
-                        state.selected_index = Some(usize::MIN);
+                        state.selected_index = Some(TrackIndex::MIN);
                     }
                     select_changed = true;
                 }
@@ -93,9 +117,7 @@ impl egui::Widget for TrackList<'_> {
             });
 
             let tracks = self
-                .player
-                .playlist()
-                .tracks()
+                .tracks
                 .iter()
                 .enumerate()
                 .filter(|item| {
@@ -112,10 +134,10 @@ impl egui::Widget for TrackList<'_> {
                     .trim()
                     .contains(&state.search.to_ascii_lowercase())
                 })
-                .collect::<Vec<(usize, &Track)>>();
+                .collect::<Vec<(TrackIndex, &Track)>>();
 
             // NOTE: To avoid track clone, store to be act index and handle later.
-            let mut action_index: Option<usize> = None;
+            let mut play_index: Option<TrackIndex> = None;
 
             let width = ui.available_width();
             let mut table = TableBuilder::new(ui)
@@ -147,7 +169,7 @@ impl egui::Widget for TrackList<'_> {
                 *index = index.to_owned().clamp(0, total.saturating_sub(1));
 
                 if enter_pressed {
-                    action_index = tracks.get(*index).map(|item| item.0);
+                    play_index = tracks.get(*index).map(|item| item.0);
                 }
                 if select_changed {
                     table = table.scroll_to_row(*index, None);
@@ -181,7 +203,7 @@ impl egui::Widget for TrackList<'_> {
 
                     body.rows(24.0, total, |mut row| {
                         let row_index = row.index();
-                        let (playlist_index, playlist_track) = tracks[row_index];
+                        let (item_index, item) = tracks[row_index];
 
                         if state.selected_index.is_some_and(|index| index == row_index) {
                             row.set_selected(true);
@@ -189,32 +211,43 @@ impl egui::Widget for TrackList<'_> {
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if !self.player.is_stopped()
-                                    && self
-                                        .player
-                                        .current_track()
-                                        .is_some_and(|track| track.eq(playlist_track))
-                                {
-                                    ui.add(
-                                        egui::Image::new(if self.player.is_paused() {
-                                            include_image!("../../assets/icons/pause.svg")
-                                        } else {
-                                            include_image!("../../assets/icons/play.svg")
-                                        })
-                                        .max_size((16.0, 16.0).into()),
-                                    );
+                                if let Some(indicator) = self.indicator.as_ref() {
+                                    let image_size = (16.0, 16.0);
+
+                                    match indicator {
+                                        TrackListIndicator::Playing(index) => {
+                                            if item_index.eq(index) {
+                                                ui.add(
+                                                    egui::Image::new(include_image!(
+                                                        "../../assets/icons/pause.svg"
+                                                    ))
+                                                    .max_size(image_size.into()),
+                                                );
+                                            }
+                                        }
+                                        TrackListIndicator::Paused(index) => {
+                                            if item_index.eq(index) {
+                                                ui.add(
+                                                    egui::Image::new(include_image!(
+                                                        "../../assets/icons/play.svg"
+                                                    ))
+                                                    .max_size(image_size.into()),
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             });
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.album.as_deref().unwrap_or("-"));
+                            ui.label(item.album.as_deref().unwrap_or("-"));
                         });
                         row.col(|ui| {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let disc = playlist_track.disc.as_deref().unwrap_or_default();
-                                    let track = playlist_track.track.as_deref().unwrap_or_default();
+                                    let disc = item.disc.as_deref().unwrap_or_default();
+                                    let track = item.track.as_deref().unwrap_or_default();
 
                                     match (disc.is_empty(), track.is_empty()) {
                                         (false, false) => {
@@ -229,26 +262,29 @@ impl egui::Widget for TrackList<'_> {
                             );
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.title.as_deref().unwrap_or("-"));
+                            ui.label(item.title.as_deref().unwrap_or("-"));
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.artist.as_deref().unwrap_or("-"));
+                            ui.label(item.artist.as_deref().unwrap_or("-"));
                         });
 
                         if row.response().clicked() {
                             state.selected_index = Some(row_index);
+                            select_changed = true;
                         }
+
                         if row.response().double_clicked() {
-                            action_index = Some(playlist_index);
+                            play_index = Some(item_index);
                         }
                     });
                 });
 
-            if let Some(index) = action_index {
-                self.player.playlist_mut().select_track(index);
-                if let Some(track) = self.player.playlist().current_track().cloned() {
-                    self.player.play_track(&track);
-                }
+            if select_changed {
+                *self.action = state.selected_index.map(TrackListAction::Select);
+            }
+
+            if play_index.is_some() {
+                *self.action = play_index.map(TrackListAction::Play);
             }
 
             state.store(ui.ctx(), id);

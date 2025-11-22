@@ -10,11 +10,16 @@ use crate::{
     database::{Database, get_all_tracks},
     player::{MusicPlayer, MusicPlayerEvent},
     playlist::Playlist,
-    ui::{control_panel::ControlPanel, track_list::TrackList},
+    track::Track,
+    ui::{
+        control_panel::ControlPanel,
+        track_list::{TrackList, TrackListAction, TrackListIndicator},
+    },
 };
 
 pub struct App {
     player: Arc<Mutex<MusicPlayer>>,
+    library: Arc<Mutex<Vec<Track>>>,
     cover: Arc<Mutex<Option<TextureHandle>>>,
 }
 
@@ -29,10 +34,12 @@ impl App {
 
         let (player_tx, player_rx) = mpsc::channel();
         let player = Arc::new(Mutex::new(MusicPlayer::new(player_tx)));
+        let library = Arc::new(Mutex::new(Vec::new()));
         let cover = Arc::new(Mutex::new(None));
 
         {
             let player = player.clone();
+            let library = library.clone();
             let cover = cover.clone();
             let ctx = cc.egui_ctx.clone();
 
@@ -41,10 +48,10 @@ impl App {
 
                 database.refresh_library(false).ok();
 
-                // NOTE: Default playlist is the library.
-                // TODO: Separate library and playlist.
-                *player.lock().playlist_mut() =
-                    Playlist::new(get_all_tracks(&database.get_connection()).unwrap_or_default());
+                let tracks = get_all_tracks(&database.get_connection()).unwrap_or_default();
+
+                *player.lock().playlist_mut() = Playlist::new("#Library", tracks.clone());
+                *library.lock() = tracks;
 
                 ctx.request_repaint();
 
@@ -108,7 +115,11 @@ impl App {
             });
         }
 
-        Self { player, cover }
+        Self {
+            player,
+            library,
+            cover,
+        }
     }
 }
 
@@ -176,7 +187,34 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            ui.add(TrackList::new(&mut player));
+            let mut action = None;
+            let mut indicator = None;
+
+            if !player.is_stopped() {
+                let current_index = player.playlist().current_track_index();
+
+                if player.is_paused() {
+                    indicator = Some(TrackListIndicator::Paused(current_index));
+                } else {
+                    indicator = Some(TrackListIndicator::Playing(current_index));
+                }
+            }
+
+            let tracks = player.playlist().tracks();
+
+            ui.add(TrackList::new(&mut action, tracks, indicator));
+
+            if let Some(action) = action {
+                match action {
+                    TrackListAction::Play(index) => {
+                        player.playlist_mut().select_track(index);
+
+                        player.stop();
+                        player.play();
+                    }
+                    TrackListAction::Select(_index) => {}
+                }
+            }
         });
     }
 }
