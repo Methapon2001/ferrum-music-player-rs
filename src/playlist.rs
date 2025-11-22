@@ -92,7 +92,7 @@ impl Playlist {
         self.tracks.push(track);
     }
 
-    pub fn append_multiple(&mut self, tracks: Vec<Track>) {
-        self.tracks.append(&mut tracks.clone());
+    pub fn append_multiple(&mut self, mut tracks: Vec<Track>) {
+        self.tracks.append(&mut tracks);
     }
 }

@@ -24,7 +24,7 @@ impl Mpris {
 
         controls
             .attach(move |event| {
-                controls_tx.send(event.to_owned()).ok();
+                controls_tx.send(event).ok();
                 player_tx.send(MusicPlayerEvent::Tick).ok();
             })
             .ok();

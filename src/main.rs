@@ -1,3 +1,6 @@
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::redundant_clone)]
+
 mod app;
 mod config;
 mod database;
