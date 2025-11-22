@@ -68,7 +68,7 @@ impl Database {
                 track_records.get(entry).is_none_or(|v| {
                     v.modified.as_deref().is_none_or(|modified| {
                         let record_modified_dt =
-                            DateTime::<chrono::Local>::from_str(modified).unwrap();
+                            DateTime::<chrono::Local>::from_str(modified).unwrap_or_default();
                         let source_modified_dt = DateTime::<chrono::Local>::from(
                             entry
                                 .metadata()
@@ -116,7 +116,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, rusqlite::Error> 
             disc_total: row.get("disc_total").ok(),
             duration: row
                 .get("duration")
-                .map(|v: i32| Duration::from_secs(u64::try_from(v.max(0)).unwrap()))
+                .map(|v: i32| Duration::from_secs(u64::try_from(v.max(0)).unwrap_or_default()))
                 .ok(),
         })
     })?

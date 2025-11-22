@@ -39,7 +39,6 @@ pub struct MusicPlayer {
     status: MusicPlayerStatus,
 
     playlist: Playlist,
-    track: Option<Track>,
 }
 
 impl MusicPlayer {
@@ -55,7 +54,6 @@ impl MusicPlayer {
             sink,
             mpris,
 
-            track: None,
             playlist: Playlist::new(Vec::new()),
             status: MusicPlayerStatus::Stopped,
         }
@@ -76,7 +74,6 @@ impl MusicPlayer {
             self.sink.play();
 
             self.status = MusicPlayerStatus::Playing;
-            self.track = Some(track);
 
             self.player_tx.send(MusicPlayerEvent::PlaybackStarted).ok();
         }
@@ -113,12 +110,9 @@ impl MusicPlayer {
     #[inline]
     pub fn play(&mut self) {
         if self.sink.is_empty() {
-            if let Some(track) = &self.track
-                && let Ok(file) = std::fs::File::open(track.path.as_path())
-            {
-                self.sink.add(rodio::Decoder::try_from(file).unwrap());
+            if let Some(track) = self.playlist.current_track() {
+                self.play_track(track.to_owned());
             }
-
             return;
         }
 
@@ -185,6 +179,6 @@ impl MusicPlayer {
 
     #[inline]
     pub fn current_track(&self) -> Option<&Track> {
-        self.track.as_ref()
+        self.playlist.current_track()
     }
 }
