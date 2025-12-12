@@ -1,10 +1,12 @@
 use std::sync::{Arc, mpsc};
-use std::thread;
+use std::{io, thread};
 
 use eframe::egui;
 use eframe::egui::TextureHandle;
+use log::debug;
 use parking_lot::Mutex;
 
+use crate::config::get_default_app_dir_config;
 use crate::{
     config::{COVER_IMAGE_SIZE, get_font_definitions},
     database::{Database, get_all_tracks},
@@ -50,12 +52,24 @@ impl App {
 
                 let tracks = get_all_tracks(&database.get_connection()).unwrap_or_default();
 
-                *player.lock().playlist_mut() = Playlist::new("#Library", tracks.clone());
                 *library.lock() = tracks;
 
-                ctx.request_repaint();
+                match Playlist::new_from_file(&get_default_app_dir_config().join("default.m3u")) {
+                    Ok(playlist) => {
+                        *player.lock().playlist_mut() = playlist;
+                    }
+                    Err(err) => {
+                        if err.kind() == io::ErrorKind::NotFound {
+                            debug!("Current playlist not found, fallback to library.");
+                        } else {
+                            debug!("{err:?}");
+                        }
 
-                // TODO: Load playlist(s).
+                        *player.lock().playlist_mut() = Playlist::new(library.lock().clone());
+                    }
+                }
+
+                ctx.request_repaint();
 
                 loop {
                     if let Ok(player_event) = player_rx.recv() {
