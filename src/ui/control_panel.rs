@@ -137,7 +137,7 @@ impl egui::Widget for ControlPanel<'_> {
                         PlaylistMode::RepeatSingle => {
                             egui::Image::new(include_image!("../../assets/icons/repeat-one.svg"))
                         }
-                        PlaylistMode::Shuffle => {
+                        PlaylistMode::Random => {
                             egui::Image::new(include_image!("../../assets/icons/shuffle.svg"))
                         }
                     })
@@ -168,8 +168,8 @@ impl egui::Widget for ControlPanel<'_> {
                     match playlist.mode() {
                         PlaylistMode::NoRepeat => playlist.set_mode(PlaylistMode::Repeat),
                         PlaylistMode::Repeat => playlist.set_mode(PlaylistMode::RepeatSingle),
-                        PlaylistMode::RepeatSingle => playlist.set_mode(PlaylistMode::Shuffle),
-                        PlaylistMode::Shuffle => playlist.set_mode(PlaylistMode::NoRepeat),
+                        PlaylistMode::RepeatSingle => playlist.set_mode(PlaylistMode::Random),
+                        PlaylistMode::Random => playlist.set_mode(PlaylistMode::NoRepeat),
                     }
                 }
             });

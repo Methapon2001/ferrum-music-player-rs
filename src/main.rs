@@ -1,12 +1,3 @@
-mod app;
-mod config;
-mod database;
-mod player;
-mod playlist;
-mod track;
-mod ui;
-
-use app::App;
 use eframe::egui;
 
 fn main() -> eframe::Result {
@@ -21,6 +12,6 @@ fn main() -> eframe::Result {
                 .with_app_id("org.ferrum.Player"),
             ..Default::default()
         },
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(|cc| Ok(Box::new(ferrum_music_player::App::new(cc)))),
     )
 }
