@@ -44,7 +44,6 @@ impl egui::Widget for TrackList<'_> {
             });
 
             let mut search_request = false;
-            let mut enter_pressed = false;
             let mut select_changed = false;
             ui.input_mut(|input_state| {
                 if !widget_focused {
@@ -54,9 +53,6 @@ impl egui::Widget for TrackList<'_> {
                     if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
                         state.selected_index = None;
                     }
-                }
-                if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
-                    enter_pressed = true;
                 }
                 if input_state.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
                     if let Some(selected) = state.selected_index.as_mut() {
@@ -88,6 +84,13 @@ impl egui::Widget for TrackList<'_> {
             if search_request {
                 search_input.request_focus();
             }
+
+            let mut enter_pressed = false;
+            ui.input_mut(|input_state| {
+                if input_state.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                    enter_pressed = true;
+                }
+            });
 
             let tracks = self
                 .player
