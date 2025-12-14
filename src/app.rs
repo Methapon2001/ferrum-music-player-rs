@@ -1,13 +1,12 @@
-use std::{
-    sync::{Arc, mpsc},
-    thread,
-};
+use std::sync::{Arc, mpsc};
+use std::thread;
 
 use eframe::egui;
+use eframe::egui::TextureHandle;
 use parking_lot::Mutex;
 
 use crate::{
-    config::{COVER_IMAGE_SIZE, COVER_IMAGE_URI, get_font_definitions},
+    config::{COVER_IMAGE_SIZE, get_font_definitions},
     database::{Database, get_all_tracks},
     player::{MusicPlayer, MusicPlayerEvent},
     playlist::Playlist,
@@ -16,7 +15,7 @@ use crate::{
 
 pub struct App {
     player: Arc<Mutex<MusicPlayer>>,
-    cover: Arc<Mutex<Option<Vec<u8>>>>,
+    cover: Arc<Mutex<Option<TextureHandle>>>,
 }
 
 impl App {
@@ -53,39 +52,49 @@ impl App {
 
                 loop {
                     if let Ok(player_event) = player_rx.recv() {
-                        let mut player = player.lock();
-
                         match player_event {
                             MusicPlayerEvent::Tick => {
+                                let mut player = player.lock();
                                 if let Some(mpris_event) = player.mpris_event() {
                                     player.mpris_handle(mpris_event);
                                 }
                                 ctx.request_repaint();
                             }
                             MusicPlayerEvent::PlaybackStarted => {
-                                let mut cover = cover.lock();
+                                let track = player.lock().current_track().cloned();
 
-                                if let Some(track) = player.current_track()
-                                    && let Ok(front_cover) = track.read_front_cover()
-                                {
-                                    if cover.ne(&front_cover) {
-                                        *cover = front_cover;
+                                let texture = track.and_then(|t| match t.read_front_cover() {
+                                    Ok(front_cover) => front_cover.as_deref().and_then(|buffer| {
+                                        image::load_from_memory(buffer)
+                                            .map(|image| {
+                                                let size =
+                                                    [image.width() as _, image.height() as _];
+                                                let image_buffer = image.to_rgba8();
+                                                let pixels = image_buffer.as_flat_samples();
 
-                                        ctx.forget_image(COVER_IMAGE_URI);
-                                    }
-                                } else if cover.is_some() {
-                                    *cover = None;
+                                                ctx.load_texture(
+                                                    "cover",
+                                                    egui::ColorImage::from_rgba_unmultiplied(
+                                                        size,
+                                                        pixels.as_slice(),
+                                                    ),
+                                                    egui::TextureOptions::default(),
+                                                )
+                                            })
+                                            .ok()
+                                    }),
+                                    Err(_) => None,
+                                });
 
-                                    ctx.forget_image(COVER_IMAGE_URI);
-                                }
+                                *cover.lock() = texture;
 
                                 ctx.request_repaint();
                             }
                             MusicPlayerEvent::PlaybackProgress => {
-                                player.mpris_update_progress();
+                                player.lock().mpris_update_progress();
                             }
                             MusicPlayerEvent::PlaybackEnded => {
-                                player.play_next();
+                                player.lock().play_next();
                                 // NOTE: Repaint is needed after doing something with playlist and
                                 // player so that the UI state isn't stale.
                                 ctx.request_repaint();
@@ -124,9 +133,9 @@ impl eframe::App for App {
                     egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
 
                 if !player.is_stopped()
-                    && let Some(cover) = self.cover.lock().as_deref()
+                    && let Some(cover) = self.cover.lock().as_ref()
                 {
-                    cover_image = egui::Image::from_bytes(COVER_IMAGE_URI, cover.to_owned())
+                    cover_image = egui::Image::from_texture(cover);
                 }
 
                 let mut cursor = ui.cursor();
@@ -140,7 +149,7 @@ impl eframe::App for App {
                     ctx.style().visuals.extreme_bg_color,
                 );
 
-                ui.add_sized(COVER_IMAGE_SIZE, cover_image);
+                ui.add_sized(COVER_IMAGE_SIZE, cover_image.shrink_to_fit());
 
                 if let Some(current_track) = player.current_track()
                     && !player.is_stopped()
