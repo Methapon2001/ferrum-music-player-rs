@@ -6,13 +6,17 @@ edition = "2024"
 [dependencies]
 chrono = "0.4.42"
 dirs = "6.0.0"
-eframe = { version = "0.33.2" }
 font-kit = "0.14.3"
 image = { version = "0.25.8", features = ["png", "jpeg"] }
 parking_lot = "0.12"
 rand = "0.9.2"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 walkdir = "2.5.0"
+
+[dependencies.eframe]
+version = "0.33.3"
+default-features = false
+features = ["accesskit", "glow", "wayland", "default_fonts"]
 
 [dependencies.lofty]
 git = "https://github.com/Serial-ATA/lofty-rs.git"
@@ -36,5 +40,5 @@ features = [
 
 [dependencies.egui_extras]
 package = "egui_extras"
-version = "0.33.2"
+version = "0.33.3"
 features = ["image", "svg"]
