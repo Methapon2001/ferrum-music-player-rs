@@ -19,7 +19,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> App {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
         cc.egui_ctx.set_fonts(get_font_definitions());
@@ -36,7 +36,7 @@ impl App {
             let cover = cover.clone();
             let ctx = cc.egui_ctx.clone();
 
-            thread::spawn(move || {
+            thread::spawn(move || -> ! {
                 let database = Database::new().expect("Database connected.");
 
                 database.refresh_library(false).ok();
@@ -56,7 +56,7 @@ impl App {
                             MusicPlayerEvent::Tick => {
                                 let mut player = player.lock();
                                 if let Some(mpris_event) = player.mpris_event() {
-                                    player.mpris_handle(mpris_event);
+                                    player.mpris_handle(&mpris_event);
                                 }
                                 ctx.request_repaint();
                             }
@@ -64,7 +64,9 @@ impl App {
                                 let track = player.lock().current_track().cloned();
 
                                 let texture = track.and_then(|t| match t.read_front_cover() {
-                                    Ok(front_cover) => front_cover.as_deref().and_then(|buffer| {
+                                    Ok(front_cover) => {
+                                        let buffer = front_cover.as_deref()?;
+
                                         image::load_from_memory(buffer)
                                             .map(|image| {
                                                 let size =
@@ -82,7 +84,7 @@ impl App {
                                                 )
                                             })
                                             .ok()
-                                    }),
+                                    }
                                     Err(_) => None,
                                 });
 
@@ -99,7 +101,7 @@ impl App {
                                 // player so that the UI state isn't stale.
                                 ctx.request_repaint();
                             }
-                            _ => {}
+                            MusicPlayerEvent::PlaybackStopped => {}
                         }
                     }
                 }
@@ -129,14 +131,13 @@ impl eframe::App for App {
             .frame(frame)
             .resizable(false)
             .show(ctx, |ui| {
-                let mut cover_image =
-                    egui::Image::new(egui::include_image!("../assets/album-placeholder.png"));
-
-                if !player.is_stopped()
+                let cover_image = if !player.is_stopped()
                     && let Some(cover) = self.cover.lock().as_ref()
                 {
-                    cover_image = egui::Image::from_texture(cover);
-                }
+                    egui::Image::from_texture(cover)
+                } else {
+                    egui::Image::new(egui::include_image!("../assets/album-placeholder.png"))
+                };
 
                 let mut cursor = ui.cursor();
 

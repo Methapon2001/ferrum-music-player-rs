@@ -32,7 +32,7 @@ pub enum MusicPlayerStatus {
 pub struct MusicPlayer {
     player_tx: Sender<MusicPlayerEvent>,
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     stream: OutputStream,
     sink: Sink,
     mpris: Mpris,
@@ -59,18 +59,19 @@ impl MusicPlayer {
         }
     }
 
-    pub fn play_track(&mut self, track: Track) {
+    pub fn play_track(&mut self, track: &Track) {
         self.sink.stop();
 
         if let Ok(file) = std::fs::File::open(track.path.as_path()) {
             self.mpris.set_metadata(MediaMetadata {
-                album: track.as_ref().album.as_deref(),
-                title: track.as_ref().title.as_deref(),
-                artist: track.as_ref().artist.as_deref(),
-                duration: track.as_ref().duration,
+                album: track.album.as_deref(),
+                title: track.title.as_deref(),
+                artist: track.artist.as_deref(),
+                duration: track.duration,
                 cover_url: None,
             });
-            self.sink.add(rodio::Decoder::try_from(file).unwrap());
+            self.sink
+                .add(rodio::Decoder::try_from(file).expect("Audio samples."));
             self.sink.play();
 
             self.status = MusicPlayerStatus::Playing;
@@ -81,8 +82,8 @@ impl MusicPlayer {
 
     #[inline]
     pub fn play_next(&mut self) {
-        if let Some(track) = self.playlist.next_track().map(|t| t.to_owned()) {
-            self.play_track(track);
+        if let Some(track) = self.playlist.next_track().cloned() {
+            self.play_track(&track);
         } else {
             self.stop();
         }
@@ -92,8 +93,8 @@ impl MusicPlayer {
     pub fn play_previous(&mut self) {
         if self.position().as_millis() > 500 {
             self.seek(Duration::from_secs(0));
-        } else if let Some(track) = self.playlist.previous_track().map(|t| t.to_owned()) {
-            self.play_track(track);
+        } else if let Some(track) = self.playlist.previous_track().cloned() {
+            self.play_track(&track);
         }
     }
 
@@ -110,8 +111,8 @@ impl MusicPlayer {
     #[inline]
     pub fn play(&mut self) {
         if self.sink.is_empty() {
-            if let Some(track) = self.playlist.current_track() {
-                self.play_track(track.to_owned());
+            if let Some(track) = self.playlist.current_track().cloned() {
+                self.play_track(&track);
             }
             return;
         }

@@ -9,7 +9,7 @@ pub fn get_font_definitions() -> FontDefinitions {
 
     for name in ["Noto Sans", "Noto Sans JP", "Noto Sans CJK JP"] {
         let buf = match font_kit::source::SystemSource::new().select_best_match(
-            &[font_kit::family_name::FamilyName::Title(name.to_string())],
+            &[font_kit::family_name::FamilyName::Title(name.to_owned())],
             &font_kit::properties::Properties::new(),
         ) {
             Ok(font_kit::handle::Handle::Memory { bytes, .. }) => Some(bytes.to_vec()),
@@ -36,9 +36,9 @@ pub fn get_font_definitions() -> FontDefinitions {
 }
 
 pub fn get_default_app_dir_config() -> PathBuf {
-    let mut config_dir = dirs::config_dir().expect("Os config directory.");
-
-    config_dir.push("org.ferrum.Player");
+    let config_dir = dirs::config_dir()
+        .expect("Os config directory.")
+        .join("org.ferrum.Player");
 
     if !config_dir.exists() {
         std::fs::create_dir(&config_dir).expect("Config directory created.");

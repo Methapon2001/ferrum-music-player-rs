@@ -231,7 +231,7 @@ impl egui::Widget for ControlPanel<'_> {
                     }
                     if duration_slider.dragged() {
                         self.player.pause();
-                        self.player.seek(Duration::from_secs_f32(state.duration))
+                        self.player.seek(Duration::from_secs_f32(state.duration));
                     }
                     if duration_slider.drag_stopped() {
                         state.seek = false;

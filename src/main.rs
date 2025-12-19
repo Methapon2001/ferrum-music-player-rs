@@ -1,6 +1,3 @@
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::redundant_clone)]
-
 mod app;
 mod config;
 mod database;
@@ -13,6 +10,8 @@ use app::App;
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    env_logger::init();
+
     eframe::run_native(
         "Ferrum Player",
         eframe::NativeOptions {

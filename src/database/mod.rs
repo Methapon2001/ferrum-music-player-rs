@@ -2,12 +2,13 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     path::PathBuf,
-    str::FromStr,
+    str::FromStr as _,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
 use chrono::DateTime;
+use log::debug;
 use parking_lot::{Mutex, MutexGuard};
 use rusqlite::{Connection, named_params};
 
@@ -56,7 +57,7 @@ impl Database {
         let track_records: HashMap<PathBuf, Track> = get_all_tracks(&conn)
             .unwrap_or_default()
             .into_iter()
-            .map(|item| (item.path.to_owned(), item))
+            .map(|item| (item.path.clone(), item))
             .collect();
         let mut track_entries = get_default_audio_dir_config()
             .as_deref()
@@ -83,13 +84,13 @@ impl Database {
         }
 
         if let Ok(tx) = conn.transaction() {
-            track_entries.iter().for_each(|entry| {
+            for entry in &track_entries {
                 if let Err(err) =
                     upsert_track(&tx, &read_track_metadata(entry).expect("Music metadata."))
                 {
-                    dbg!("Failed to update database:", err);
-                };
-            });
+                    debug!("Failed to update database: {err:?}");
+                }
+            }
 
             tx.commit()?;
         }
