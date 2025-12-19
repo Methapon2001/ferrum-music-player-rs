@@ -218,10 +218,10 @@ impl egui::Widget for TrackList<'_> {
 
                                     match (disc.is_empty(), track.is_empty()) {
                                         (false, false) => {
-                                            ui.label(format!("{}.{:0>2}", disc, track));
+                                            ui.label(format!("{disc}.{track:0>2}"));
                                         }
                                         (true, false) => {
-                                            ui.label(format!("{:0>2}", track));
+                                            ui.label(format!("{track:0>2}"));
                                         }
                                         _ => {}
                                     }
@@ -246,8 +246,8 @@ impl egui::Widget for TrackList<'_> {
 
             if let Some(index) = action_index {
                 self.player.playlist_mut().select_track(index);
-                if let Some(track) = self.player.playlist().current_track() {
-                    self.player.play_track(track.to_owned());
+                if let Some(track) = self.player.playlist().current_track().cloned() {
+                    self.player.play_track(&track);
                 }
             }
 

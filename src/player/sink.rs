@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
+use log::warn;
 use parking_lot::Mutex;
 use rodio::{Source, mixer::Mixer, queue};
 
@@ -54,7 +55,7 @@ impl Sink {
     }
 
     /// Add sound to sink and play if stopped or else add to queue.
-    pub fn add<S>(&mut self, source: S)
+    pub fn add<S>(&self, source: S)
     where
         S: Source + Send + 'static,
     {
@@ -86,8 +87,13 @@ impl Sink {
                 let track_position = pausable.inner_mut();
                 *controls.position.lock() = track_position.get_pos();
 
-                if let Some(seek) = controls.seek.lock().take() {
-                    let _ = s.try_seek(seek);
+                if let Some(err) = controls
+                    .seek
+                    .lock()
+                    .take()
+                    .and_then(|seek| s.try_seek(seek).err())
+                {
+                    warn!("Seek error: {err:?}");
                 }
             })
             .periodic_access(Duration::from_millis(500), move |_| {
@@ -110,7 +116,7 @@ impl Sink {
     }
 
     #[inline]
-    pub fn stop(&mut self) {
+    pub fn stop(&self) {
         self.controls.stopped.store(true, Ordering::SeqCst);
     }
 
@@ -157,7 +163,7 @@ impl Sink {
     #[inline]
     pub fn sleep_until_end(&self) {
         if let Some(sleep_until_end) = self.sleep_until_end.lock().take() {
-            let _ = sleep_until_end.recv();
+            sleep_until_end.recv().ok();
         }
     }
 }

@@ -1,4 +1,4 @@
-use rand::{Rng, seq::SliceRandom};
+use rand::{Rng as _, seq::SliceRandom as _};
 
 use crate::track::Track;
 

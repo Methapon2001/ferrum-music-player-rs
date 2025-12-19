@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<I: Source, F> Iterator for DoneCallback<I, F>
+impl<I, F> Iterator for DoneCallback<I, F>
 where
     I: Source,
     F: FnOnce(),

@@ -9,14 +9,13 @@ use chrono::{DateTime, Local};
 use lofty::{
     config::ParseOptions,
     error::LoftyError,
-    file::{AudioFile, TaggedFileExt},
+    file::{AudioFile as _, TaggedFileExt as _},
     picture::PictureType,
     probe::Probe,
     tag::ItemKey,
 };
 use walkdir::WalkDir;
 
-#[allow(unused)]
 #[derive(Default, Clone, Debug)]
 pub struct Track {
     pub path: PathBuf,
@@ -51,8 +50,8 @@ impl PartialEq for Track {
     }
 }
 
-impl AsRef<Track> for Track {
-    fn as_ref(&self) -> &Track {
+impl AsRef<Self> for Track {
+    fn as_ref(&self) -> &Self {
         self
     }
 }

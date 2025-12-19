@@ -1,5 +1,6 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use log::info;
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
@@ -18,7 +19,7 @@ impl Mpris {
             display_name: "Ferrum Player",
             hwnd: None,
         })
-        .unwrap();
+        .expect("Media controls");
 
         let (controls_tx, controls_rx) = mpsc::sync_channel(32);
 
@@ -35,11 +36,11 @@ impl Mpris {
         }
     }
 
-    pub fn try_recv_event(&mut self) -> Option<MediaControlEvent> {
+    pub fn try_recv_event(&self) -> Option<MediaControlEvent> {
         self.controls_rx.try_recv().ok()
     }
 
-    pub fn set_metadata(&mut self, metadata: MediaMetadata) {
+    pub fn set_metadata(&mut self, metadata: MediaMetadata<'_>) {
         self.controls.set_metadata(metadata).ok();
     }
 
@@ -53,22 +54,22 @@ impl Mpris {
 }
 
 impl MusicPlayer {
-    pub fn mpris_event(&mut self) -> Option<MediaControlEvent> {
+    pub fn mpris_event(&self) -> Option<MediaControlEvent> {
         self.mpris.try_recv_event()
     }
 
-    pub fn mpris_handle(&mut self, event: MediaControlEvent) {
+    pub fn mpris_handle(&mut self, event: &MediaControlEvent) {
         match event {
-            MediaControlEvent::SetVolume(value) => self.set_volume(value as f32),
+            MediaControlEvent::SetVolume(value) => self.set_volume(*value as f32),
             MediaControlEvent::Play => self.play(),
             MediaControlEvent::Next => self.play_next(),
             MediaControlEvent::Previous => self.play_previous(),
             MediaControlEvent::Pause => self.pause(),
             MediaControlEvent::Toggle => self.toggle(),
             MediaControlEvent::Stop => self.stop(),
-            MediaControlEvent::SetPosition(MediaPosition(value)) => self.seek(value),
+            MediaControlEvent::SetPosition(MediaPosition(value)) => self.seek(*value),
             _ => {
-                dbg!("MPRIS event received but not implemented.");
+                info!("MPRIS event received but not implemented.");
             }
         }
 
