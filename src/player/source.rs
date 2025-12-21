@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use rodio::{ChannelCount, SampleRate, Source, source::SeekError};
+use rodio::source::SeekError;
+use rodio::{ChannelCount, SampleRate, Source};
 
 pub(super) struct DoneCallback<I, F>
 where

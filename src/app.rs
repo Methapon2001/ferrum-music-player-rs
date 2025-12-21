@@ -1,5 +1,7 @@
-use std::sync::{Arc, mpsc};
-use std::{io, thread};
+use std::io;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 
 use eframe::egui;
 use eframe::egui::TextureHandle;
@@ -7,17 +9,13 @@ use log::debug;
 use parking_lot::Mutex;
 
 use crate::config::get_default_app_dir_config;
-use crate::{
-    config::{COVER_IMAGE_SIZE, get_font_definitions},
-    database::{Database, get_all_tracks},
-    player::{MusicPlayer, MusicPlayerEvent},
-    playlist::Playlist,
-    track::Track,
-    ui::{
-        control_panel::ControlPanel,
-        track_list::{TrackList, TrackListAction, TrackListIndicator},
-    },
-};
+use crate::config::{COVER_IMAGE_SIZE, get_font_definitions};
+use crate::database::{Database, get_all_tracks};
+use crate::player::{MusicPlayer, MusicPlayerEvent};
+use crate::playlist::Playlist;
+use crate::track::Track;
+use crate::ui::control_panel::ControlPanel;
+use crate::ui::track_list::{TrackList, TrackListAction, TrackListIndicator};
 
 pub struct App {
     player: Arc<Mutex<MusicPlayer>>,
