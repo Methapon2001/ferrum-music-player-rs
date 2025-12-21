@@ -2,20 +2,31 @@ use eframe::egui;
 use eframe::egui::include_image;
 use egui_extras::{Column, TableBuilder};
 
-use crate::track::Track;
+use crate::{playlist::PlaylistId, track::Track};
 
 pub type TrackIndex = usize;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum TrackListAction {
     Play(TrackIndex),
     Select(TrackIndex),
+
+    SendToQueue(Vec<TrackIndex>),
+
+    Edit(TrackIndex),
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum TrackListIndicator {
     Playing(TrackIndex),
     Paused(TrackIndex),
+}
+
+#[derive(Debug, Clone)]
+pub enum TrackListItemMenu {
+    SendToQueue,
+    SendToPlaylist(Vec<PlaylistId>),
+    Edit(Vec<TrackIndex>),
 }
 
 #[derive(Default, Clone)]
@@ -38,6 +49,8 @@ pub struct TrackList<'a> {
     action: &'a mut Option<TrackListAction>,
     tracks: &'a [Track],
     indicator: Option<TrackListIndicator>,
+
+    item_menu: Vec<TrackListItemMenu>,
 }
 
 impl<'a> TrackList<'a> {
@@ -50,7 +63,14 @@ impl<'a> TrackList<'a> {
             action,
             tracks,
             indicator,
+
+            item_menu: Vec::new(),
         }
+    }
+
+    pub fn item_menu(mut self, menus: Vec<TrackListItemMenu>) -> Self {
+        self.item_menu = menus;
+        self
     }
 }
 
@@ -116,6 +136,8 @@ impl egui::Widget for TrackList<'_> {
                 }
             });
 
+            ui.separator();
+
             let tracks = self
                 .tracks
                 .iter()
@@ -137,7 +159,7 @@ impl egui::Widget for TrackList<'_> {
                 .collect::<Vec<(TrackIndex, &Track)>>();
 
             // NOTE: To avoid track clone, store to be act index and handle later.
-            let mut play_index: Option<TrackIndex> = None;
+            let mut action_index: Option<TrackIndex> = None;
 
             let width = ui.available_width();
             let mut table = TableBuilder::new(ui)
@@ -169,7 +191,7 @@ impl egui::Widget for TrackList<'_> {
                 *index = index.to_owned().clamp(0, total.saturating_sub(1));
 
                 if enter_pressed {
-                    play_index = tracks.get(*index).map(|item| item.0);
+                    action_index = tracks.get(*index).map(|item| item.0);
                 }
                 if select_changed {
                     table = table.scroll_to_row(*index, None);
@@ -203,7 +225,12 @@ impl egui::Widget for TrackList<'_> {
 
                     body.rows(24.0, total, |mut row| {
                         let row_index = row.index();
-                        let (item_index, item) = tracks[row_index];
+
+                        let Some(item) = tracks.get(row_index).copied() else {
+                            return;
+                        };
+
+                        let (item_index, item) = item;
 
                         if state.selected_index.is_some_and(|index| index == row_index) {
                             row.set_selected(true);
@@ -268,13 +295,37 @@ impl egui::Widget for TrackList<'_> {
                             ui.label(item.artist.as_deref().unwrap_or("-"));
                         });
 
-                        if row.response().clicked() {
+                        if !self.item_menu.is_empty() {
+                            row.response().context_menu(|ui| {
+                                let mut send_to_queue = None;
+
+                                for menu in &self.item_menu {
+                                    match menu {
+                                        TrackListItemMenu::SendToQueue => {
+                                            send_to_queue =
+                                                Some(egui::Button::new("Send to current playlist"));
+                                        }
+                                        TrackListItemMenu::SendToPlaylist(_ids) => {}
+                                        TrackListItemMenu::Edit(_indexes) => {}
+                                    }
+                                }
+
+                                if let Some(send_to_queue) = send_to_queue
+                                    && ui.add(send_to_queue).clicked()
+                                {
+                                    *self.action =
+                                        Some(TrackListAction::SendToQueue(vec![item_index]));
+                                }
+                            });
+                        }
+
+                        if row.response().clicked() || row.response().secondary_clicked() {
                             state.selected_index = Some(row_index);
                             select_changed = true;
                         }
 
                         if row.response().double_clicked() {
-                            play_index = Some(item_index);
+                            action_index = Some(item_index);
                         }
                     });
                 });
@@ -283,8 +334,8 @@ impl egui::Widget for TrackList<'_> {
                 *self.action = state.selected_index.map(TrackListAction::Select);
             }
 
-            if play_index.is_some() {
-                *self.action = play_index.map(TrackListAction::Play);
+            if action_index.is_some() {
+                *self.action = action_index.map(TrackListAction::Play);
             }
 
             state.store(ui.ctx(), id);

@@ -5,22 +5,30 @@ use std::thread;
 
 use eframe::egui;
 use eframe::egui::TextureHandle;
+use egui_extras::{Size, StripBuilder};
 use log::debug;
 use parking_lot::Mutex;
 
-use crate::config::get_default_app_dir_config;
-use crate::config::{COVER_IMAGE_SIZE, get_font_definitions};
+use crate::config::{COVER_IMAGE_SIZE, get_default_app_dir_config, get_font_definitions};
 use crate::database::{Database, get_all_tracks};
-use crate::player::{MusicPlayer, MusicPlayerEvent};
-use crate::playlist::Playlist;
+use crate::player::{GeneralMusicPlayer as _, MusicPlayer, MusicPlayerEvent};
+use crate::playlist::{Playlist, PlaylistId};
 use crate::track::Track;
 use crate::ui::control_panel::ControlPanel;
+use crate::ui::track_list::TrackListItemMenu;
 use crate::ui::track_list::{TrackList, TrackListAction, TrackListIndicator};
+
+enum TrackListView {
+    Library,
+    Playlist(Option<PlaylistId>),
+}
 
 pub struct App {
     player: Arc<Mutex<MusicPlayer>>,
     library: Arc<Mutex<Vec<Track>>>,
     cover: Arc<Mutex<Option<TextureHandle>>>,
+
+    current_track_list_view: TrackListView,
 }
 
 impl App {
@@ -58,12 +66,10 @@ impl App {
                     }
                     Err(err) => {
                         if err.kind() == io::ErrorKind::NotFound {
-                            debug!("Current playlist not found, fallback to library.");
+                            debug!("Current playlist not found.");
                         } else {
                             debug!("{err:?}");
                         }
-
-                        *player.lock().playlist_mut() = Playlist::new(library.lock().clone());
                     }
                 }
 
@@ -131,102 +137,204 @@ impl App {
             player,
             library,
             cover,
+
+            current_track_list_view: TrackListView::Library,
+        }
+    }
+
+    pub fn panel(&mut self, ui: &mut egui::Ui) {
+        let mut player = self.player.lock();
+
+        ui.add(ControlPanel::new(&mut *player));
+
+        // TODO: Scan progress.
+    }
+
+    pub fn meta(&mut self, ui: &mut egui::Ui) {
+        let player = self.player.lock();
+
+        StripBuilder::new(ui)
+            .size(Size::remainder())
+            .size(Size::exact(1.0))
+            .size(Size::remainder())
+            .vertical(|mut strip| {
+                strip.cell(|ui| {
+                    let mut cursor = ui.cursor();
+
+                    cursor.set_width(COVER_IMAGE_SIZE.0);
+                    cursor.set_height(COVER_IMAGE_SIZE.1);
+
+                    let style = ui.ctx().style();
+
+                    ui.painter().rect_filled(
+                        cursor,
+                        style.noninteractive().corner_radius,
+                        style.visuals.extreme_bg_color,
+                    );
+
+                    ui.add_sized(
+                        COVER_IMAGE_SIZE,
+                        if !player.is_stopped()
+                            && let Some(cover) = self.cover.lock().as_ref()
+                        {
+                            egui::Image::from_texture(cover)
+                        } else {
+                            egui::Image::new(egui::include_image!(
+                                "../assets/album-placeholder.png"
+                            ))
+                        }
+                        .shrink_to_fit(),
+                    )
+                    .on_hover_text_at_pointer("Cover Image");
+
+                    if let Some(current_track) = player.current_track()
+                        && !player.is_stopped()
+                    {
+                        ui.horizontal(|ui| {
+                            ui.vertical_centered(|ui| {
+                                match (
+                                    current_track.album.as_deref(),
+                                    current_track.title.as_deref(),
+                                ) {
+                                    (Some(album), Some(title)) => {
+                                        ui.heading(title);
+                                        ui.label(album);
+                                    }
+                                    (Some(album), None) => {
+                                        ui.label(album);
+                                    }
+                                    (None, Some(title)) => {
+                                        ui.label(title);
+                                    }
+                                    (None, None) => {
+                                        ui.label("Unknown");
+                                    }
+                                }
+                            });
+                        });
+                    }
+                });
+                strip.cell(|ui| {
+                    ui.separator();
+                });
+                strip.cell(|ui| {
+                    ui.vertical_centered_justified(|ui| {
+                        let library_button = ui.add(egui::Button::new("Library"));
+                        let playlist_button = ui.add(egui::Button::new("Default Playlist"));
+
+                        if library_button.clicked() {
+                            self.current_track_list_view = TrackListView::Library;
+                        }
+                        if playlist_button.clicked() {
+                            self.current_track_list_view = TrackListView::Playlist(None);
+                        }
+                    });
+                });
+            });
+    }
+
+    pub fn body(&mut self, ui: &mut egui::Ui) {
+        let mut player = self.player.lock();
+
+        let mut action = None;
+        let mut indicator = None;
+
+        if !player.is_stopped() {
+            let playlist = player.playlist();
+            let playing_playlist_id = playlist.get_id().map(|item| item.to_owned());
+            let current_playing_index = playlist.current_track_index();
+
+            match &self.current_track_list_view {
+                TrackListView::Playlist(current_id) => {
+                    if playing_playlist_id.eq(current_id) {
+                        if player.is_paused() {
+                            indicator = Some(TrackListIndicator::Paused(current_playing_index));
+                        } else {
+                            indicator = Some(TrackListIndicator::Playing(current_playing_index));
+                        }
+                    }
+                }
+                TrackListView::Library => {}
+            }
+
+            if let TrackListView::Playlist(current_id) = &self.current_track_list_view
+                && playing_playlist_id.eq(current_id)
+            {
+                if player.is_paused() {
+                    indicator = Some(TrackListIndicator::Paused(current_playing_index));
+                } else {
+                    indicator = Some(TrackListIndicator::Playing(current_playing_index));
+                }
+            }
+        }
+
+        match &self.current_track_list_view {
+            TrackListView::Library => {
+                let library = self.library.lock();
+
+                ui.add(
+                    TrackList::new(&mut action, library.as_slice(), indicator)
+                        .item_menu(vec![TrackListItemMenu::SendToQueue]),
+                );
+
+                if let Some(action) = action {
+                    match action {
+                        TrackListAction::Play(index) => {
+                            player.playlist_mut().clear();
+                            player.playlist_mut().push(library[index].clone());
+
+                            player.stop();
+                            player.play();
+                        }
+                        TrackListAction::Select(_index) => {}
+                        TrackListAction::Edit(_index) => {}
+
+                        TrackListAction::SendToQueue(indexes) => {
+                            for index in indexes {
+                                player.playlist_mut().push(library[index].clone());
+                            }
+                        }
+                    }
+                }
+            }
+            TrackListView::Playlist(view_playlist_id) => {
+                let tracks = player.playlist().tracks();
+
+                ui.add(TrackList::new(&mut action, tracks, indicator));
+
+                if let Some(action) = action {
+                    match action {
+                        TrackListAction::Play(index) => {
+                            player.playlist_mut().select_track(index);
+
+                            player.stop();
+                            player.play();
+                        }
+                        TrackListAction::Select(_index) => {}
+                        TrackListAction::Edit(_index) => {}
+
+                        TrackListAction::SendToQueue(_indexes) => {}
+                    }
+                }
+            }
         }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut player = self.player.lock();
-
         let frame = egui::frame::Frame::new()
             .fill(ctx.style().visuals.panel_fill)
             .inner_margin(12);
 
         egui::TopBottomPanel::bottom("controls")
             .frame(frame)
-            .show(ctx, |ui| {
-                ui.add(ControlPanel::new(&mut player));
-                // TODO: Scan progress.
-            });
-
-        egui::SidePanel::left("music_metadata")
+            .show(ctx, |ui| self.panel(ui));
+        egui::SidePanel::left("meta")
             .frame(frame)
-            .resizable(false)
-            .show(ctx, |ui| {
-                let cover_image = if !player.is_stopped()
-                    && let Some(cover) = self.cover.lock().as_ref()
-                {
-                    egui::Image::from_texture(cover)
-                } else {
-                    egui::Image::new(egui::include_image!("../assets/album-placeholder.png"))
-                };
-
-                let mut cursor = ui.cursor();
-
-                cursor.set_width(COVER_IMAGE_SIZE.0);
-                cursor.set_height(COVER_IMAGE_SIZE.1);
-
-                ui.painter().rect_filled(
-                    cursor,
-                    ctx.style().noninteractive().corner_radius,
-                    ctx.style().visuals.extreme_bg_color,
-                );
-
-                ui.add_sized(COVER_IMAGE_SIZE, cover_image.shrink_to_fit());
-
-                if let Some(current_track) = player.current_track()
-                    && !player.is_stopped()
-                {
-                    ui.vertical_centered(|ui| {
-                        match (
-                            current_track.album.as_deref(),
-                            current_track.title.as_deref(),
-                        ) {
-                            (Some(album), Some(title)) => {
-                                ui.heading(format!("{album} - {title}"));
-                            }
-                            (Some(album), None) => {
-                                ui.heading(album);
-                            }
-                            (None, Some(title)) => {
-                                ui.heading(title);
-                            }
-                            (None, None) => {}
-                        }
-                    });
-                }
-            });
-
-        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            let mut action = None;
-            let mut indicator = None;
-
-            if !player.is_stopped() {
-                let current_index = player.playlist().current_track_index();
-
-                if player.is_paused() {
-                    indicator = Some(TrackListIndicator::Paused(current_index));
-                } else {
-                    indicator = Some(TrackListIndicator::Playing(current_index));
-                }
-            }
-
-            let tracks = player.playlist().tracks();
-
-            ui.add(TrackList::new(&mut action, tracks, indicator));
-
-            if let Some(action) = action {
-                match action {
-                    TrackListAction::Play(index) => {
-                        player.playlist_mut().select_track(index);
-
-                        player.stop();
-                        player.play();
-                    }
-                    TrackListAction::Select(_index) => {}
-                }
-            }
-        });
+            .show(ctx, |ui| self.meta(ui));
+        egui::CentralPanel::default()
+            .frame(frame)
+            .show(ctx, |ui| self.body(ui));
     }
 }

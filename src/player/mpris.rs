@@ -5,7 +5,7 @@ use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
 
-use crate::player::{MusicPlayer, MusicPlayerEvent, MusicPlayerStatus};
+use crate::player::{GeneralMusicPlayer as _, MusicPlayer, MusicPlayerEvent, MusicPlayerStatus};
 
 pub(super) struct Mpris {
     controls: MediaControls,
