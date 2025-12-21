@@ -140,7 +140,7 @@ pub fn upsert_track(conn: &Connection, track: &Track) -> Result<i32, rusqlite::E
             ":track_total": track.track_total,
             ":disc": track.disc,
             ":disc_total": track.disc_total,
-            ":duration": track.duration.map(|v| v.as_secs()),
+            ":duration": track.duration.map(|v| u32::try_from(v.as_secs()).unwrap_or(0)),
         },
         |row| row.get(0),
     )
