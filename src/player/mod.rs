@@ -1,9 +1,11 @@
-use std::{sync::mpsc::Sender, time::Duration};
+use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 use rodio::{OutputStream, OutputStreamBuilder};
 use souvlaki::MediaMetadata;
 
-use crate::{playlist::Playlist, track::Track};
+use crate::playlist::Playlist;
+use crate::track::Track;
 
 mod mpris;
 use mpris::Mpris;
