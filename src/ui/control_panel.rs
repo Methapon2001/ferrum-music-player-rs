@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Stroke, include_image};
 
-use crate::{player::MusicPlayer, playlist::PlaylistMode};
+use crate::{player::GeneralMusicPlayer, playlist::PlaylistMode};
 
 #[derive(Clone)]
 struct State {
@@ -33,17 +33,17 @@ impl State {
     }
 }
 
-pub struct ControlPanel<'a> {
-    player: &'a mut MusicPlayer,
+pub struct ControlPanel<'a, T: GeneralMusicPlayer> {
+    player: &'a mut T,
 }
 
-impl<'a> ControlPanel<'a> {
-    pub fn new(player: &'a mut MusicPlayer) -> Self {
+impl<'a, T: GeneralMusicPlayer> ControlPanel<'a, T> {
+    pub fn new(player: &'a mut T) -> Self {
         Self { player }
     }
 }
 
-impl egui::Widget for ControlPanel<'_> {
+impl<T: GeneralMusicPlayer> egui::Widget for ControlPanel<'_, T> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let id = ui.next_auto_id();
         let mut state = State::load(ui.ctx(), id).unwrap_or_default();
@@ -91,6 +91,7 @@ impl egui::Widget for ControlPanel<'_> {
 
             ui.scope(|ui| {
                 ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                ui.style_mut().spacing.item_spacing = egui::Vec2::new(4., 4.);
 
                 let stop_button = ui.add_enabled(
                     !self.player.is_stopped(),

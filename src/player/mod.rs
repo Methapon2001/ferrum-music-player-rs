@@ -15,6 +15,40 @@ use sink::Sink;
 
 mod source;
 
+pub trait GeneralMusicPlayer {
+    fn play_track(&mut self, track: &Track);
+
+    fn play_next(&mut self);
+
+    fn play_previous(&mut self);
+
+    fn playlist(&self) -> &Playlist;
+
+    fn playlist_mut(&mut self) -> &mut Playlist;
+
+    fn play(&mut self);
+
+    fn pause(&mut self);
+
+    fn stop(&mut self);
+
+    fn toggle(&mut self);
+
+    fn seek(&mut self, position: Duration);
+
+    fn is_paused(&self) -> bool;
+
+    fn is_stopped(&self) -> bool;
+
+    fn set_volume(&mut self, value: f32);
+
+    fn volume(&self) -> f32;
+
+    fn position(&self) -> Duration;
+
+    fn current_track(&self) -> Option<&Track>;
+}
+
 pub enum MusicPlayerEvent {
     Tick,
 
@@ -60,8 +94,10 @@ impl MusicPlayer {
             status: MusicPlayerStatus::Stopped,
         }
     }
+}
 
-    pub fn play_track(&mut self, track: &Track) {
+impl GeneralMusicPlayer for MusicPlayer {
+    fn play_track(&mut self, track: &Track) {
         self.sink.stop();
 
         if let Ok(file) = std::fs::File::open(track.path.as_path()) {
@@ -83,7 +119,7 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn play_next(&mut self) {
+    fn play_next(&mut self) {
         if let Some(track) = self.playlist.next_track().cloned() {
             self.play_track(&track);
         } else {
@@ -92,7 +128,7 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn play_previous(&mut self) {
+    fn play_previous(&mut self) {
         if self.position().as_millis() > 500 {
             self.seek(Duration::from_secs(0));
         } else if let Some(track) = self.playlist.previous_track().cloned() {
@@ -101,17 +137,17 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn playlist(&self) -> &Playlist {
+    fn playlist(&self) -> &Playlist {
         &self.playlist
     }
 
     #[inline]
-    pub fn playlist_mut(&mut self) -> &mut Playlist {
+    fn playlist_mut(&mut self) -> &mut Playlist {
         &mut self.playlist
     }
 
     #[inline]
-    pub fn play(&mut self) {
+    fn play(&mut self) {
         if self.sink.is_empty() {
             if let Some(track) = self.playlist.current_track().cloned() {
                 self.play_track(&track);
@@ -124,7 +160,7 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn pause(&mut self) {
+    fn pause(&mut self) {
         if self.sink.is_empty() {
             return;
         }
@@ -134,13 +170,13 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         self.sink.stop();
         self.status = MusicPlayerStatus::Stopped;
     }
 
     #[inline]
-    pub fn toggle(&mut self) {
+    fn toggle(&mut self) {
         if self.is_paused() {
             self.play();
         } else {
@@ -149,39 +185,39 @@ impl MusicPlayer {
     }
 
     #[inline]
-    pub fn seek(&mut self, position: Duration) {
+    fn seek(&mut self, position: Duration) {
         self.sink.seek(position);
         self.mpris_update_progress();
     }
 
     #[inline]
-    pub fn is_paused(&self) -> bool {
+    fn is_paused(&self) -> bool {
         self.sink.is_paused()
     }
 
     #[inline]
-    pub fn is_stopped(&self) -> bool {
+    fn is_stopped(&self) -> bool {
         self.sink.is_empty()
     }
 
     #[inline]
-    pub fn set_volume(&mut self, value: f32) {
+    fn set_volume(&mut self, value: f32) {
         self.mpris.set_volume(value.clamp(0.0, 1.0) as f64);
         self.sink.set_volume(value.clamp(0.0, 1.2));
     }
 
     #[inline]
-    pub fn volume(&self) -> f32 {
+    fn volume(&self) -> f32 {
         self.sink.volume()
     }
 
     #[inline]
-    pub fn position(&self) -> Duration {
+    fn position(&self) -> Duration {
         self.sink.position()
     }
 
     #[inline]
-    pub fn current_track(&self) -> Option<&Track> {
+    fn current_track(&self) -> Option<&Track> {
         self.playlist.current_track()
     }
 }

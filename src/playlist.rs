@@ -13,6 +13,8 @@ use crate::{
     track::{Track, read_track_metadata},
 };
 
+pub type PlaylistId = String;
+
 #[derive(Debug)]
 pub enum PlaylistMode {
     NoRepeat,
@@ -26,7 +28,7 @@ pub struct Playlist {
     mode: PlaylistMode,
     tracks: Vec<Track>,
 
-    id: Option<String>,
+    id: Option<PlaylistId>,
     current_index: usize,
     previous_index: Vec<usize>,
 }
@@ -131,6 +133,10 @@ impl Playlist {
     }
 
     pub fn select_track(&mut self, index: usize) {
+        if self.tracks.is_empty() {
+            return;
+        }
+
         self.previous_index = Vec::new();
         self.current_index = index.clamp(0, self.tracks.len() - 1);
     }
@@ -201,6 +207,7 @@ impl Playlist {
     pub fn clear(&mut self) {
         self.tracks = Vec::new();
         self.previous_index = Vec::new();
+        self.current_index = 0;
     }
 
     pub fn push(&mut self, track: Track) {
