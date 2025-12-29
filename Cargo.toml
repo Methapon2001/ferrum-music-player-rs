@@ -22,7 +22,7 @@ features = ["accesskit", "glow", "wayland", "default_fonts"]
 
 [dependencies.lofty]
 git = "https://github.com/Serial-ATA/lofty-rs.git"
-rev = "2727c5ce65501dc57075e3995958ecdea1ea4569"
+rev = "26198472c764dbe55132e60d9bf5aedf665c5285"
 
 [dependencies.souvlaki]
 version = "0.8.3"
