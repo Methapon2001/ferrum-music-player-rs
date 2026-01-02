@@ -12,7 +12,7 @@ image = "0.25.9"
 log = "0.4.29"
 parking_lot = "0.12"
 rand = "0.9.2"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 walkdir = "2.5.0"
 
 [dependencies.eframe]
