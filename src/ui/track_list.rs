@@ -249,7 +249,7 @@ impl egui::Widget for TrackList<'_> {
                                             if item_index.eq(index) {
                                                 ui.add(
                                                     egui::Image::new(include_image!(
-                                                        "../../assets/icons/pause.svg"
+                                                        "../../assets/icons/play.svg"
                                                     ))
                                                     .max_size(image_size.into()),
                                                 );
@@ -259,7 +259,7 @@ impl egui::Widget for TrackList<'_> {
                                             if item_index.eq(index) {
                                                 ui.add(
                                                     egui::Image::new(include_image!(
-                                                        "../../assets/icons/play.svg"
+                                                        "../../assets/icons/pause.svg"
                                                     ))
                                                     .max_size(image_size.into()),
                                                 );
