@@ -64,11 +64,7 @@ impl<T: GeneralMusicPlayer> egui::Widget for ControlPanel<'_, T> {
                             return;
                         }
 
-                        if self.player.is_paused() {
-                            self.player.play();
-                        } else {
-                            self.player.pause();
-                        }
+                        self.player.toggle();
                     }
                     if input_state.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
                         self.player.seek(Duration::from_secs_f32(
