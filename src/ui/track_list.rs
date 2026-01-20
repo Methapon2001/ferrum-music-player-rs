@@ -1,39 +1,84 @@
 use eframe::egui;
-use eframe::egui::include_image;
+use eframe::egui::{Id, include_image};
 use egui_extras::{Column, TableBuilder};
 
-use crate::{player::MusicPlayer, track::Track};
+use crate::track::Track;
+
+pub type TrackIndex = usize;
+
+#[derive(Debug, Clone)]
+pub enum TrackListAction {
+    Play(TrackIndex),
+    Select(TrackIndex),
+
+    SendToCurrentPlaylist(Vec<TrackIndex>),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrackListIndicator {
+    Playing(TrackIndex),
+    Paused(TrackIndex),
+}
+
+#[derive(Debug, Clone)]
+pub enum TrackListContextMenu {
+    SendToCurrentPlaylist,
+}
 
 #[derive(Default, Clone)]
 struct State {
-    search: String,
-    selected_index: Option<usize>,
+    scroll_position: f32,
+    search_input: String,
+    selected_index: Option<TrackIndex>,
 }
 
 impl State {
-    pub fn load(ctx: &egui::Context, id: egui::Id) -> Option<Self> {
+    pub fn load(ctx: &egui::Context, id: Id) -> Option<Self> {
         ctx.data_mut(|d| d.get_persisted(id))
     }
 
-    pub fn store(self, ctx: &egui::Context, id: egui::Id) {
+    pub fn store(self, ctx: &egui::Context, id: Id) {
         ctx.data_mut(|d| d.insert_persisted(id, self));
     }
 }
 
 pub struct TrackList<'a> {
-    player: &'a mut MusicPlayer,
+    id: Id,
+
+    action: &'a mut Option<TrackListAction>,
+    tracks: &'a [Track],
+    indicator: Option<TrackListIndicator>,
+
+    context_menu: Vec<TrackListContextMenu>,
 }
 
 impl<'a> TrackList<'a> {
-    pub fn new(player: &'a mut MusicPlayer) -> Self {
-        Self { player }
+    pub fn new(
+        action: &'a mut Option<TrackListAction>,
+        tracks: &'a [Track],
+        indicator: Option<TrackListIndicator>,
+        id: impl Into<Id>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+
+            action,
+            tracks,
+            indicator,
+
+            context_menu: Vec::new(),
+        }
+    }
+
+    pub fn context_menu(mut self, menus: Vec<TrackListContextMenu>) -> Self {
+        self.context_menu = menus;
+        self
     }
 }
 
 impl egui::Widget for TrackList<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let id = ui.next_auto_id();
-        let mut state = State::load(ui.ctx(), id).unwrap_or_default();
+        let mut state = State::load(ui.ctx(), self.id).unwrap_or_default();
 
         ui.vertical(|ui| {
             let mut widget_focused = false;
@@ -58,7 +103,7 @@ impl egui::Widget for TrackList<'_> {
                     if let Some(selected) = state.selected_index.as_mut() {
                         *selected = selected.saturating_sub(1);
                     } else {
-                        state.selected_index = Some(usize::MAX);
+                        state.selected_index = Some(TrackIndex::MAX);
                     }
                     select_changed = true;
                 }
@@ -66,7 +111,7 @@ impl egui::Widget for TrackList<'_> {
                     if let Some(selected) = state.selected_index.as_mut() {
                         *selected = selected.saturating_add(1);
                     } else {
-                        state.selected_index = Some(usize::MIN);
+                        state.selected_index = Some(TrackIndex::MIN);
                     }
                     select_changed = true;
                 }
@@ -74,7 +119,7 @@ impl egui::Widget for TrackList<'_> {
 
             let search_input = ui.add_sized(
                 [ui.available_width(), 30.0],
-                egui::TextEdit::singleline(&mut state.search)
+                egui::TextEdit::singleline(&mut state.search_input)
                     .vertical_align(egui::Align::Center)
                     .hint_text("Search"),
             );
@@ -92,14 +137,14 @@ impl egui::Widget for TrackList<'_> {
                 }
             });
 
+            ui.separator();
+
             let tracks = self
-                .player
-                .playlist()
-                .tracks()
+                .tracks
                 .iter()
                 .enumerate()
                 .filter(|item| {
-                    if state.search.is_empty() {
+                    if state.search_input.is_empty() {
                         return true;
                     }
                     format!(
@@ -110,12 +155,12 @@ impl egui::Widget for TrackList<'_> {
                     )
                     .to_ascii_lowercase()
                     .trim()
-                    .contains(&state.search.to_ascii_lowercase())
+                    .contains(&state.search_input.to_ascii_lowercase())
                 })
-                .collect::<Vec<(usize, &Track)>>();
+                .collect::<Vec<(TrackIndex, &Track)>>();
 
             // NOTE: To avoid track clone, store to be act index and handle later.
-            let mut action_index: Option<usize> = None;
+            let mut action_index: Option<TrackIndex> = None;
 
             let width = ui.available_width();
             let mut table = TableBuilder::new(ui)
@@ -140,7 +185,7 @@ impl egui::Widget for TrackList<'_> {
 
             let total = tracks.len();
 
-            if !state.search.is_empty() && total == 1 {
+            if !state.search_input.is_empty() && total == 1 {
                 state.selected_index = Some(0);
             }
             if let Some(index) = state.selected_index.as_mut() {
@@ -151,10 +196,12 @@ impl egui::Widget for TrackList<'_> {
                 }
                 if select_changed {
                     table = table.scroll_to_row(*index, None);
+                } else {
+                    table = table.vertical_scroll_offset(state.scroll_position);
                 }
             }
 
-            table
+            let scroll_output = table
                 .header(32.0, |mut header| {
                     header.col(|ui| {
                         ui.centered_and_justified(|ui| {
@@ -181,7 +228,12 @@ impl egui::Widget for TrackList<'_> {
 
                     body.rows(24.0, total, |mut row| {
                         let row_index = row.index();
-                        let (playlist_index, playlist_track) = tracks[row_index];
+
+                        let Some(item) = tracks.get(row_index).copied() else {
+                            return;
+                        };
+
+                        let (item_index, item) = item;
 
                         if state.selected_index.is_some_and(|index| index == row_index) {
                             row.set_selected(true);
@@ -189,32 +241,43 @@ impl egui::Widget for TrackList<'_> {
 
                         row.col(|ui| {
                             ui.centered_and_justified(|ui| {
-                                if !self.player.is_stopped()
-                                    && self
-                                        .player
-                                        .current_track()
-                                        .is_some_and(|track| track.eq(playlist_track))
-                                {
-                                    ui.add(
-                                        egui::Image::new(if self.player.is_paused() {
-                                            include_image!("../../assets/icons/pause.svg")
-                                        } else {
-                                            include_image!("../../assets/icons/play.svg")
-                                        })
-                                        .max_size((16.0, 16.0).into()),
-                                    );
+                                if let Some(indicator) = self.indicator.as_ref() {
+                                    let image_size = (16.0, 16.0);
+
+                                    match indicator {
+                                        TrackListIndicator::Playing(index) => {
+                                            if item_index.eq(index) {
+                                                ui.add(
+                                                    egui::Image::new(include_image!(
+                                                        "../../assets/icons/play.svg"
+                                                    ))
+                                                    .max_size(image_size.into()),
+                                                );
+                                            }
+                                        }
+                                        TrackListIndicator::Paused(index) => {
+                                            if item_index.eq(index) {
+                                                ui.add(
+                                                    egui::Image::new(include_image!(
+                                                        "../../assets/icons/pause.svg"
+                                                    ))
+                                                    .max_size(image_size.into()),
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             });
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.album.as_deref().unwrap_or("-"));
+                            ui.label(item.album.as_deref().unwrap_or("-"));
                         });
                         row.col(|ui| {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let disc = playlist_track.disc.as_deref().unwrap_or_default();
-                                    let track = playlist_track.track.as_deref().unwrap_or_default();
+                                    let disc = item.disc.as_deref().unwrap_or_default();
+                                    let track = item.track.as_deref().unwrap_or_default();
 
                                     match (disc.is_empty(), track.is_empty()) {
                                         (false, false) => {
@@ -229,29 +292,58 @@ impl egui::Widget for TrackList<'_> {
                             );
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.title.as_deref().unwrap_or("-"));
+                            ui.label(item.title.as_deref().unwrap_or("-"));
                         });
                         row.col(|ui| {
-                            ui.label(playlist_track.artist.as_deref().unwrap_or("-"));
+                            ui.label(item.artist.as_deref().unwrap_or("-"));
                         });
 
-                        if row.response().clicked() {
-                            state.selected_index = Some(row_index);
+                        if !self.context_menu.is_empty() {
+                            row.response().context_menu(|ui| {
+                                let mut send_to_queue = None;
+
+                                for menu in &self.context_menu {
+                                    match menu {
+                                        TrackListContextMenu::SendToCurrentPlaylist => {
+                                            send_to_queue =
+                                                Some(egui::Button::new("Send to current playlist"));
+                                        }
+                                    }
+                                }
+
+                                if let Some(send_to_queue) = send_to_queue
+                                    && ui.add(send_to_queue).clicked()
+                                {
+                                    *self.action =
+                                        Some(TrackListAction::SendToCurrentPlaylist(vec![
+                                            item_index,
+                                        ]));
+                                }
+                            });
                         }
+
+                        if row.response().clicked() || row.response().secondary_clicked() {
+                            state.selected_index = Some(row_index);
+                            select_changed = true;
+                        }
+
                         if row.response().double_clicked() {
-                            action_index = Some(playlist_index);
+                            action_index = Some(item_index);
                         }
                     });
                 });
 
-            if let Some(index) = action_index {
-                self.player.playlist_mut().select_track(index);
-                if let Some(track) = self.player.playlist().current_track().cloned() {
-                    self.player.play_track(&track);
-                }
+            state.scroll_position = scroll_output.state.offset.y;
+
+            if select_changed {
+                *self.action = state.selected_index.map(TrackListAction::Select);
             }
 
-            state.store(ui.ctx(), id);
+            if action_index.is_some() {
+                *self.action = action_index.map(TrackListAction::Play);
+            }
+
+            state.store(ui.ctx(), self.id);
         })
         .response
     }

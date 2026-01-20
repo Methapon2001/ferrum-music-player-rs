@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use log::warn;
 use parking_lot::Mutex;
-use rodio::{Source, mixer::Mixer, queue};
+use rodio::Source;
+use rodio::mixer::Mixer;
+use rodio::queue;
 
 use super::MusicPlayerEvent;
 use super::source::DoneCallback;

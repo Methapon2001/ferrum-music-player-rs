@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use eframe::egui::{FontData, FontDefinitions, FontFamily};
 
-pub const COVER_IMAGE_SIZE: (f32, f32) = (275., 275.);
+pub const COVER_IMAGE_SIZE: (f32, f32) = (256., 256.);
 
 pub fn get_font_definitions() -> FontDefinitions {
     let mut font_definitions = FontDefinitions::default();

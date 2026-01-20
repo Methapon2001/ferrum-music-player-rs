@@ -1,21 +1,17 @@
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    path::PathBuf,
-    str::FromStr as _,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr as _;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use chrono::DateTime;
 use log::debug;
 use parking_lot::{Mutex, MutexGuard};
 use rusqlite::{Connection, named_params};
 
-use crate::{
-    config::{get_default_app_dir_config, get_default_audio_dir_config},
-    track::{Track, read_track_metadata, scan_tracks},
-};
+use crate::config::{get_default_app_dir_config, get_default_audio_dir_config};
+use crate::track::{Track, read_track_metadata, scan_tracks};
 
 #[derive(Clone)]
 pub struct Database {
